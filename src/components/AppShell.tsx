@@ -18,6 +18,7 @@ import AnalysisPage from "@/components/AnalysisPage";
 import WarningsPage from "@/components/WarningsPage";
 import NotesPage from "@/components/NotesPage";
 import BackupPage from "@/components/BackupPage";
+import Link from "next/link";
 
 type PageKey =
   | "puantaj" | "nobet" | "sablon" | "izin" | "degisim" | "personel"
@@ -140,7 +141,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         </nav>
 
         <div className="px-3 py-3 border-t border-white/[.08] space-y-2">
-          <a
+          <Link
             href="/personel" target="_blank"
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/15 transition text-xs font-bold"
           >
@@ -149,7 +150,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
               Personel Sorgu Ekranı
               <span className="block text-[9.5px] font-medium opacity-60">Şifresiz · TC ile giriş</span>
             </span>
-          </a>
+          </Link>
           <PreviewDownloadButton />
           <p className="text-white/20 text-[9px] px-1 leading-relaxed">
             İzinli personelin nöbet listesinden çıkarılması, dinlenme süreleri ve mükerrer vardiya koruması aktiftir.

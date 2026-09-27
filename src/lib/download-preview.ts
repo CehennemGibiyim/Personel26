@@ -26,7 +26,7 @@ export async function downloadPanelPreview(): Promise<{ ok: boolean; error?: str
   } catch (e) {
     // Yedek: yeni sekmede statik dosyayı aç (Ctrl/Cmd+S ile kaydedilebilir)
     try {
-      window.open("/panel-onizleme.html", "_blank", "noopener");
+      window.open(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/panel-onizleme.html`, "_blank", "noopener");
     } catch {
       /* yok say */
     }

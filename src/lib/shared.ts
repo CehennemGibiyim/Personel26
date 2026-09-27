@@ -34,28 +34,75 @@ export const PERSONNEL_TYPE_META: Record<PersonnelType, {
 
 export const PERSONNEL_TYPE_ORDER: PersonnelType[] = ["MEMUR", "ISCI", "HEMSIRE"];
 
-/** Personel ekleme/düzenleme ünvan önerileri (sağlık + destek + idari kadrolar). */
-export const TITLE_SUGGESTIONS = [
-  // Hemşirelik ve klinik
-  "Hemşire", "Sorumlu Hemşire", "Servis Hemşiresi", "Yoğun Bakım Hemşiresi",
-  "Acil Hemşiresi", "Ameliyathane Hemşiresi", "Ebe", "ATT", "Paramedik",
-  "Sağlık Memuru", "Sağlık Teknikeri", "Hasta Bakıcı", "Hasta Taşıyıcı",
-  // Tıbbi teknik
-  "Tıbbi Sekreter", "Diyetisyen", "Fizyoterapist", "Laborant", "Laboratuvar Teknikeri",
-  "Röntgen Teknisyeni", "Radyoloji Teknikeri", "Anestezi Teknikeri",
-  "Diyaliz Teknikeri", "Eczane Teknikeri", "Sterilizasyon Personeli",
-  "Doktor", "Pratisyen Hekim", "Uzman Hekim",
-  // Temizlik ve destek (işçi kadrosu)
-  "Temizlik Personeli", "Temizlik Görevlisi", "Kat Görevlisi", "Servis Personeli",
-  "Yemekhane Personeli", "Aşçı", "Aşçı Yardımcısı", "Bulaşıkçı",
-  "Çamaşırhane Personeli", "Ütücü", "Bahçıvan", "Tesisatçı",
-  "Elektrikçi", "Teknik Servis", "Bakım Onarım Personeli", "Kaloriferci",
-  "Güvenlik Görevlisi", "Bekçi", "Şoför", "Ambulans Şoförü",
-  "Depo Görevlisi", "Satın Alma Personeli", "Arşiv Personeli",
-  // İdari
-  "Memur", "Büro Personeli", "Bilgi İşlem Personeli", "Vezne Görevlisi",
-  "Danışma Personeli", "Hasta Kabul Memuru", "İnsan Kaynakları",
+/**
+ * Hastane ünvan kataloğu (gruplu). Her grubun önerilen personel sınıfı vardır;
+ * listeden ünvan seçilince sınıf otomatik önerilir (kullanıcı değiştirebilir).
+ * Listede olmayan ünvanlar serbest metin olarak da yazılabilir.
+ */
+export const TITLE_GROUPS: { group: string; type: PersonnelType; titles: string[] }[] = [
+  {
+    group: "Hemşirelik ve Ebelik", type: "HEMSIRE",
+    titles: [
+      "Hemşire", "Sorumlu Hemşire", "Servis Sorumlu Hemşiresi", "Yoğun Bakım Hemşiresi",
+      "Acil Servis Hemşiresi", "Ameliyathane Hemşiresi", "Diyaliz Hemşiresi",
+      "Enfeksiyon Kontrol Hemşiresi", "Eğitim Hemşiresi", "Ebe", "Sorumlu Ebe",
+    ],
+  },
+  {
+    group: "Hekimler", type: "MEMUR",
+    titles: ["Uzman Doktor", "Pratisyen Hekim", "Asistan Doktor", "Diş Hekimi", "Başhekim", "Başhekim Yardımcısı"],
+  },
+  {
+    group: "Sağlık Teknik ve Yardımcı Personel", type: "MEMUR",
+    titles: [
+      "Acil Tıp Teknisyeni (ATT)", "Paramedik", "Sağlık Memuru", "Sağlık Teknikeri",
+      "Anestezi Teknikeri", "Radyoloji Teknikeri", "Röntgen Teknisyeni", "Laboratuvar Teknikeri",
+      "Laborant", "Diyaliz Teknikeri", "Ameliyathane Teknikeri", "Fizyoterapist", "Diyetisyen",
+      "Psikolog", "Sosyal Çalışmacı", "Eczacı", "Ecza Teknisyeni", "Biyolog", "Odyometrist",
+    ],
+  },
+  {
+    group: "İdari ve Büro Personeli", type: "MEMUR",
+    titles: [
+      "Tıbbi Sekreter", "Sağlık Bakım Hizmetleri Müdürü", "İdari ve Mali İşler Müdürü",
+      "Müdür Yardımcısı", "Şef", "Memur", "Veri Hazırlama ve Kontrol İşletmeni (VHKİ)",
+      "Ayniyat Saymanı", "Muhasebe Personeli", "Satın Alma Personeli", "İnsan Kaynakları Personeli",
+      "Arşiv Personeli", "Kalite Birimi Personeli", "Halkla İlişkiler Personeli",
+      "Hasta Hakları Personeli", "Bilgi İşlem Personeli",
+    ],
+  },
+  {
+    group: "Destek Hizmetleri (İşçi)", type: "ISCI",
+    titles: [
+      "Temizlik Personeli", "Temizlik Sorumlusu", "Hasta Bakım Personeli", "Hasta Bakıcı",
+      "Hasta Kabul Personeli", "Hasta Karşılama / Yönlendirme", "Hasta Taşıma / Transfer Personeli",
+      "Güvenlik Görevlisi", "Özel Güvenlik Sorumlusu", "Şoför", "Ambulans Şoförü",
+      "Aşçı", "Aşçı Yardımcısı", "Yemekhane Personeli", "Bulaşıkçı", "Çamaşırhane Personeli",
+      "Ütücü", "Terzi", "Sterilizasyon Personeli", "Morg Görevlisi", "Depo Personeli",
+      "Santral Operatörü", "Çağrı Merkezi Personeli", "Kurye / Evrak Taşıma", "Bahçıvan",
+      "Çay Ocağı Personeli", "Büro Personeli (İşçi)",
+    ],
+  },
+  {
+    group: "Teknik Hizmetler (İşçi)", type: "ISCI",
+    titles: [
+      "Teknik Servis Personeli", "Elektrik Teknisyeni", "Elektrikçi", "Tesisatçı",
+      "Kaloriferci / Kazan Operatörü", "Biyomedikal Teknisyeni", "Klima Teknisyeni",
+      "Asansör Teknisyeni", "Jeneratör Operatörü", "Medikal Gaz Teknisyeni",
+      "Marangoz", "Boyacı", "Kaynakçı",
+    ],
+  },
 ];
+
+/** Ünvanın bağlı olduğu grubun önerdiği sınıf (listede yoksa null). */
+export function suggestedTypeForTitle(title: string): PersonnelType | null {
+  const t = title.trim().toLocaleLowerCase("tr");
+  if (!t) return null;
+  for (const g of TITLE_GROUPS) {
+    if (g.titles.some(x => x.toLocaleLowerCase("tr") === t)) return g.type;
+  }
+  return null;
+}
 
 export function personnelTypeLabel(t: string | null | undefined): string {
   if (t === "ISCI" || t === "MEMUR" || t === "HEMSIRE") return PERSONNEL_TYPE_META[t].label;

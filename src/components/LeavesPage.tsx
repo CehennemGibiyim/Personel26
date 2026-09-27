@@ -9,6 +9,7 @@ import {
   type Department, type Personnel, type LeaveRequest, personnelInDepartment,
 } from "@/lib/shared";
 import { Btn, Modal, Field, TextInput, SelectInput, TextArea, Badge, Spinner, EmptyState, Avatar, cx } from "@/components/ui-kit";
+import { downloadFromApi } from "@/lib/api-client";
 
 async function api(path: string, method: string, body?: unknown) {
   const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -98,7 +99,7 @@ export default function LeavesPage({
   }
 
   function exportExcel() {
-    window.location.href = `/api/export/izinler?dept=${selectedDept}&year=${year}&status=${filter}`;
+    downloadFromApi(`/api/export/izinler?dept=${selectedDept}&year=${year}&status=${filter}`, "izinler.xlsx");
   }
 
   return (

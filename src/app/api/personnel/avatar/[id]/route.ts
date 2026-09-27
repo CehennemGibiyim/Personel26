@@ -23,7 +23,10 @@ export async function GET(req: Request, { params }: Params) {
     return new Response(null, { status: 304, headers: { ETag: etag } });
   }
 
-  const bytes = Uint8Array.from(Buffer.from(row.data, "base64"));
+  // atob hem Node 18+ hem tarayıcıda (GitHub Pages sürümü) vardır
+  const bin = atob(row.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return new Response(bytes, {
     headers: {
       "Content-Type": row.mime,

@@ -1,4 +1,4 @@
-import { db, pool } from "@/db";
+import { db } from "@/db";
 import {
   departments, personnel, personnelDepartments, holidays, timesheetEntries,
   shiftSchedules, leaveRequests, shiftSwapRequests, shiftTemplates, weeklyOverrides,

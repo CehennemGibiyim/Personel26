@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { UserPlus, Check, Users, Pencil, Power, FileSignature } from "lucide-react";
 import { Modal, Btn, Field, TextInput, cx } from "@/components/ui-kit";
 import type { Department, Personnel, PersonnelType } from "@/lib/shared";
-import { personnelInDepartment, PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, TITLE_SUGGESTIONS, cyclePersonnelType } from "@/lib/shared";
+import { personnelInDepartment, PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, cyclePersonnelType } from "@/lib/shared";
+import TitlePicker from "@/components/TitlePicker";
 
 async function api(path: string, method: string, body: unknown) {
   const res = await fetch(path, {
@@ -59,17 +60,8 @@ export function AddPersonnelModal({ departments, defaultDeptId, onAdded, onClose
             onChange={e => setTcNo(e.target.value.replace(/\D/g, "").slice(0, 11))}
           />
         </Field>
-        <Field label="Ünvan (opsiyonel)" hint="Listeyi açarak seçebilir veya serbest yazabilirsiniz.">
-          <input
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            list="add-title-suggest"
-            placeholder="Hemşire, Temizlik Personeli, Aşçı, Şoför…"
-            className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-sky-400/70 placeholder:text-white/25"
-          />
-          <datalist id="add-title-suggest">
-            {TITLE_SUGGESTIONS.map(t => <option key={t} value={t} />)}
-          </datalist>
+        <Field label="Ünvan (opsiyonel)">
+          <TitlePicker value={title} onChange={setTitle} onSuggestType={setType} />
         </Field>
         <Field label="Departman">
           <div className="grid grid-cols-2 gap-2">

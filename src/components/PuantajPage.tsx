@@ -16,6 +16,7 @@ import { Btn, Spinner } from "@/components/ui-kit";
 import { AddPersonnelModal, PersonnelManageModal, SignatureModal } from "@/components/modals";
 import PrintArea, { openPrintPreview } from "@/components/PrintArea";
 import PrintOptionsModal from "@/components/PrintOptionsModal";
+import { downloadFromApi } from "@/lib/api-client";
 
 // ─────────────────────────────────────────────
 // Puantaj hücre girişi (kod veya saat — kaynak ShiftCodeCell)
@@ -268,11 +269,11 @@ export default function PuantajPage({
 
   // ═════ Dışa aktarma (sunucudan gerçek dosya indirimi) ═════
   function exportExcel() {
-    window.location.href = `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx`;
+    downloadFromApi(`/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx`, "puantaj.xlsx");
   }
 
   function exportCSV() {
-    window.location.href = `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=csv`;
+    downloadFromApi(`/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=csv`, "puantaj.csv");
   }
 
   // ═════ Tablo render ═════

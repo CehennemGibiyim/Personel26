@@ -17,6 +17,7 @@ import { Btn, Spinner, Modal, Field, TextInput, Badge, cx } from "@/components/u
 import PrintArea, { openPrintPreview } from "@/components/PrintArea";
 import PrintOptionsModal from "@/components/PrintOptionsModal";
 import { downloadPanelPreview } from "@/lib/download-preview";
+import { downloadFromApi } from "@/lib/api-client";
 
 type ApprovedLeave = Pick<LeaveRequest, "personnelId" | "startDate" | "endDate" | "leaveType">;
 
@@ -328,8 +329,8 @@ export default function NobetPage({
         </Btn>
         <Btn small onClick={() => load()} title="Yenile"><RefreshCw className="w-3.5 h-3.5" /></Btn>
         <Btn small variant="primary" onClick={runDraft} disabled={busy}><Wand2 className="w-3.5 h-3.5" /> Taslak Oluştur</Btn>
-        <Btn small variant="success" onClick={() => { window.location.href = `/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx`; }}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
-        <Btn small onClick={() => { window.location.href = `/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=csv`; }}><FileText className="w-3.5 h-3.5" /> CSV</Btn>
+        <Btn small variant="success" onClick={() => { downloadFromApi(`/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx`, "nobet.xlsx"); }}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
+        <Btn small onClick={() => { downloadFromApi(`/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=csv`, "nobet.csv"); }}><FileText className="w-3.5 h-3.5" /> CSV</Btn>
         <Btn small variant="amber" onClick={() => setShowPrintModal(true)}><Printer className="w-3.5 h-3.5" /> Yazdır / PDF</Btn>
         <Btn small onClick={() => downloadPanelPreview()} title="Bu ekranın statik kopyasını index.html olarak indir (paylaşım için)"><MonitorDown className="w-3.5 h-3.5" /> Arayüzü İndir (.html)</Btn>
       </div>

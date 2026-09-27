@@ -1,8 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   Fingerprint, CalendarDays, Moon, Clock, ShieldCheck, KeyRound,
-  HeartPulse, AlertCircle, LogOut, ArrowLeft, Sparkles, UserCheck,
+  HeartPulse, ChevronLeft, ChevronRight, AlertCircle, LogOut,
 } from "lucide-react";
 import {
   MONTHS, DAYS_TR, DAYS_FULL, LEAVE_CODE_MAP, fmtTr,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/shared";
 import { getShiftRangeMetrics } from "@/lib/puantaj-engine";
 import { MonthNav, Badge, Avatar, cx } from "@/components/ui-kit";
+import Link from "next/link";
 
 type LookupResult = {
   person: {
@@ -38,68 +39,36 @@ export default function PersonelSelfService() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<LookupResult | null>(null);
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(8); // Eylül
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth());
 
-  useEffect(() => {
-    const now = new Date();
-    setYear(now.getFullYear());
-    setMonth(now.getMonth());
-  }, []);
-
-  async function lookup(targetYear?: number, targetMonth?: number, customTc?: string, customSurname?: string) {
-    const queryTc = customTc ?? tc;
-    const querySurname = customSurname ?? surname;
-    if (!queryTc || queryTc.length !== 11) {
-      setErr("Lütfen 11 haneli TC Kimlik Numaranızı girin.");
-      return;
-    }
-    if (!querySurname || querySurname.trim().length < 2) {
-      setErr("Lütfen soyadınızı girin.");
-      return;
-    }
-    setBusy(true);
-    setErr("");
+  async function lookup(y?: number, m?: number) {
+    setBusy(true); setErr("");
     try {
       const res = await fetch("/api/personel-lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tcNo: queryTc,
-          surname: querySurname,
-          year: targetYear ?? year,
-          month: targetMonth ?? month,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tcNo: tc, surname, year: y ?? year, month: m ?? month }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Sorgu başarısız");
       setResult(data);
-      setYear(data.year);
-      setMonth(data.month);
+      setYear(data.year); setMonth(data.month);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Sorgu başarısız");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function fillDemoAndLookup(demoTc: string, demoSurname: string) {
-    setTc(demoTc);
-    setSurname(demoSurname);
-    lookup(year, month, demoTc, demoSurname);
+    } finally { setBusy(false); }
   }
 
   if (!result) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-radial-gradient">
-        <div className="w-full max-w-md anim-slide space-y-4">
-          <div className="flex flex-col items-center text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-sky-500/30 border border-white/15 flex items-center justify-center mb-3 shadow-lg shadow-emerald-950/40">
+      <div className="min-h-screen flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-md anim-slide">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-sky-500/30 border border-white/15 flex items-center justify-center mb-3">
               <Fingerprint className="w-7 h-7 text-emerald-400" />
             </div>
             <h1 className="text-2xl font-black text-white" style={{ fontFamily: "var(--font-grotesk)" }}>Personel Bilgi Ekranı</h1>
             <p className="text-white/40 text-xs mt-1.5 max-w-xs leading-relaxed">
-              Kendi nöbet listenizi, izin durumunuzu ve puantaj özetinizi görüntülemek için TC Kimlik No ve soyadınızla giriş yapın.
+              Kendi nöbet listenizi, izin durumunuzu ve puantaj özetinizi görüntülemek için TC Kimlik No ve soyadınızla doğrulama yapın.
             </p>
           </div>
 
@@ -107,9 +76,7 @@ export default function PersonelSelfService() {
             <div>
               <label className="text-white/50 text-[11px] font-bold uppercase tracking-wider block mb-1.5">TC Kimlik No</label>
               <input
-                value={tc}
-                inputMode="numeric"
-                autoFocus
+                value={tc} inputMode="numeric" autoFocus
                 onChange={e => setTc(e.target.value.replace(/\D/g, "").slice(0, 11))}
                 onKeyDown={e => e.key === "Enter" && lookup()}
                 placeholder="11 haneli TC kimlik numaranız"
@@ -122,57 +89,33 @@ export default function PersonelSelfService() {
                 value={surname}
                 onChange={e => setSurname(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && lookup()}
-                placeholder="Soyadınız (veya tam adınız)"
+                placeholder="Soyadınız (veya ad soyad)"
                 className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-500/20 transition placeholder:text-white/25"
               />
+              <p className="text-white/30 text-[10px] mt-1">Türkçe karakter zorunlu değil — “Çelik”, “CELIK” veya “celik” hepsi kabul edilir.</p>
             </div>
             {err && (
               <div className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs rounded-lg px-3 py-2.5 anim-slide">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{err}</span>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /> {err}
               </div>
             )}
             <button
               onClick={() => lookup()}
               disabled={tc.length !== 11 || surname.trim().length < 2 || busy}
-              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm transition active:scale-[.98] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50"
+              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-sm transition active:scale-[.98] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
             >
-              <KeyRound className="w-4 h-4" /> {busy ? "Doğrulanıyor…" : "Bilgilerimi Getir"}
+              <KeyRound className="w-4 h-4" /> {busy ? "Doğrulanıyor…" : "Sorgula"}
             </button>
-
-            {/* Hızlı Demo Doldurma Butonları */}
-            <div className="pt-2 border-t border-white/[.08] space-y-1.5">
-              <div className="text-white/35 text-[10px] font-semibold flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-400" /> Hızlı Örnek Personel ile Giriş (Test için):
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => fillDemoAndLookup("10000000146", "ÇELİK")}
-                  className="px-2.5 py-1.5 rounded-lg bg-white/[.05] border border-white/10 hover:border-emerald-400/40 text-left text-xs text-white/80 hover:text-white transition cursor-pointer"
-                >
-                  <span className="block font-bold text-emerald-300">AYŞE ÇELİK</span>
-                  <span className="block text-[10px] text-white/40">10000000146</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemoAndLookup("10000000236", "ŞAHİN")}
-                  className="px-2.5 py-1.5 rounded-lg bg-white/[.05] border border-white/10 hover:border-emerald-400/40 text-left text-xs text-white/80 hover:text-white transition cursor-pointer"
-                >
-                  <span className="block font-bold text-sky-300">MEHMET ŞAHİN</span>
-                  <span className="block text-[10px] text-white/40">10000000236</span>
-                </button>
-              </div>
-            </div>
           </div>
 
-          <p className="text-white/25 text-[10px] text-center flex items-center justify-center gap-1.5">
+          <p className="text-white/25 text-[10px] text-center mt-4 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3" /> Bu ekran salt-okunurdur; şifre gerektirmez ve yalnızca kendi bilgilerinizi gösterir.
           </p>
-          <div className="text-center">
-            <a href="/" className="text-sky-400/80 hover:text-sky-300 text-xs font-semibold inline-flex items-center gap-1 transition">
-              <ArrowLeft className="w-3.5 h-3.5" /> Yönetim paneline dön
-            </a>
+          <p className="text-white/25 text-[10px] text-center mt-1">
+            Giriş yapamıyorsanız TC numaranızın Personel Yönetimi’nde kayıtlı ve hesabınızın aktif olduğunu yöneticinize kontrol ettirin.
+          </p>
+          <div className="text-center mt-2">
+            <Link href="/" className="text-sky-400/70 hover:text-sky-300 text-xs font-semibold transition">Yönetim paneline dön →</Link>
           </div>
         </div>
       </div>
@@ -193,7 +136,7 @@ export default function PersonelSelfService() {
         {person.hasAvatar
           ? <Avatar person={{ id: person.id, name: person.name, hasAvatar: true, avatarUpdatedAt: person.avatarUpdatedAt }} size={52} className="!rounded-2xl" ring />
           : (
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-sky-500/30 border border-white/15 flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/30 to-sky-500/30 border border-white/15 flex items-center justify-center">
               <HeartPulse className="w-6 h-6 text-emerald-400" />
             </div>
           )}
@@ -205,11 +148,7 @@ export default function PersonelSelfService() {
         </div>
         <div className="flex-1" />
         <MonthNav year={year} month={month} onChange={(y, m) => lookup(y, m)} />
-        <button
-          onClick={() => setResult(null)}
-          className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white transition cursor-pointer"
-          title="Çıkış Yap"
-        >
+        <button onClick={() => setResult(null)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white transition" title="Çıkış">
           <LogOut className="w-4 h-4" />
         </button>
       </div>

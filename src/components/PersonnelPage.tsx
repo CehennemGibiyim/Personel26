@@ -7,10 +7,12 @@ import {
 } from "lucide-react";
 import {
   type Department, type Personnel, type PersonnelType,
-  PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, TITLE_SUGGESTIONS, cyclePersonnelType, fmtTr,
+  PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, cyclePersonnelType, fmtTr,
 } from "@/lib/shared";
 import { Btn, Modal, Field, TextInput, SelectInput, TextArea, Badge, Spinner, EmptyState, Avatar, cx } from "@/components/ui-kit";
 import { fileToSquareDataUrl } from "@/lib/image-resize";
+import TitlePicker from "@/components/TitlePicker";
+import { downloadFromApi, useApiImage } from "@/lib/api-client";
 
 async function api(path: string, method: string, body?: unknown) {
   const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -97,7 +99,7 @@ export default function PersonnelPage({
 
   function exportExcel() {
     const params = new URLSearchParams({ dept: deptFilter, type: typeFilter, status: statusFilter, q: query.trim() });
-    window.location.href = `/api/export/personel?${params.toString()}`;
+    downloadFromApi(`/api/export/personel?${params.toString()}`, "personel_listesi.xlsx");
   }
 
   const hasFilter = query.trim() !== "" || deptFilter !== "ALL" || typeFilter !== "ALL" || statusFilter !== "ALL";
@@ -335,6 +337,15 @@ export default function PersonnelPage({
   );
 }
 
+/** Resmî TC Kimlik No algoritması (10. ve 11. hane kontrol basamakları). */
+function tcChecksumOk(tc: string): boolean {
+  if (!/^[1-9]\d{10}$/.test(tc)) return false;
+  const d = tc.split("").map(Number);
+  const d10 = ((d[0] + d[2] + d[4] + d[6] + d[8]) * 7 - (d[1] + d[3] + d[5] + d[7])) % 10;
+  if (((d10 + 10) % 10) !== d[9]) return false;
+  return d.slice(0, 10).reduce((a, b) => a + b, 0) % 10 === d[10];
+}
+
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="flex items-start gap-2">
@@ -384,7 +395,8 @@ function PersonnelFormModal({ departments, defaultDeptId, initial, onClose, onSa
   const existingSrc = initial?.hasAvatar
     ? `/api/personnel/avatar/${initial.id}${initial.avatarUpdatedAt ? `?v=${Date.parse(initial.avatarUpdatedAt) || 0}` : ""}`
     : null;
-  const previewSrc = avatar === undefined ? existingSrc : avatar;
+  const existingResolved = useApiImage(existingSrc);
+  const previewSrc = avatar === undefined ? existingResolved : avatar;
 
   async function pickAvatar(file: File | undefined) {
     if (!file) return;
@@ -485,20 +497,22 @@ function PersonnelFormModal({ departments, defaultDeptId, initial, onClose, onSa
             <TextInput autoFocus value={name} placeholder="AD SOYAD"
               onChange={e => setName(e.target.value.toUpperCase())} onKeyDown={e => e.key === "Enter" && save()} />
           </Field>
-          <Field label="TC Kimlik No" hint="/personel sorgu ekranında doğrulama için kullanılır.">
+          <Field label="TC Kimlik No" hint="Personel bilgi ekranında (/personel) giriş için kullanılır.">
             <TextInput value={tcNo} placeholder="11 haneli (opsiyonel)" inputMode="numeric"
               onChange={e => setTcNo(e.target.value.replace(/\D/g, "").slice(0, 11))} />
+            {tcNo.length === 11 && !tcChecksumOk(tcNo) && (
+              <p className="text-amber-300 text-[10.5px] mt-1">
+                ⚠ Bu numara resmî TC algoritmasından geçmiyor — yazım hatası olabilir. Kaydedilebilir, ancak kontrol etmeniz önerilir.
+              </p>
+            )}
+            {!tcNo && (
+              <p className="text-white/35 text-[10.5px] mt-1">TC girilmezse personel, bilgi ekranına giriş yapamaz.</p>
+            )}
           </Field>
         </div>
 
         <Field label="Ünvan">
-          <input
-            value={title} onChange={e => setTitle(e.target.value)} list="title-suggest" placeholder="Hemşire, Temizlik Personeli, Aşçı, Şoför…"
-            className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-sky-400/70 placeholder:text-white/25"
-          />
-          <datalist id="title-suggest">
-            {TITLE_SUGGESTIONS.map(t => <option key={t} value={t} />)}
-          </datalist>
+          <TitlePicker value={title} onChange={setTitle} onSuggestType={setType} />
         </Field>
 
         <Field label="Personel Sınıfı *" hint="İşçi: 45s/hf + mola düşümü · Memur/Hemşire: 40s/hf. Puantaj ve limit hesapları bu seçime göre yapılır.">

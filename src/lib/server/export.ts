@@ -358,7 +358,8 @@ export function xlsxResponse(sheets: { name: string; rows: (string | number)[][]
     ws["!cols"] = widths;
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 30));
   });
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  // "array" tipi hem Node'da hem tarayıcıda (GitHub Pages sürümü) çalışır
+  const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

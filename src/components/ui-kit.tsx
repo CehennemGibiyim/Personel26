@@ -2,6 +2,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { MONTHS } from "@/lib/shared";
+import { useApiImage } from "@/lib/api-client";
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -113,9 +114,11 @@ export function Avatar({ person, size = 36, className, ring }: {
   person: { id: string; name: string; hasAvatar?: boolean; avatarUpdatedAt?: string | null };
   size?: number; className?: string; ring?: boolean;
 }) {
-  const src = person.hasAvatar
+  const rawSrc = person.hasAvatar
     ? `/api/personnel/avatar/${person.id}${person.avatarUpdatedAt ? `?v=${Date.parse(person.avatarUpdatedAt) || 0}` : ""}`
     : null;
+  // Sunucu sürümünde aynen; GitHub Pages sürümünde blob adresine çevrilir
+  const src = useApiImage(rawSrc);
   const initials = person.name.split(/\s+/).filter(Boolean).map(x => x[0]).join("").slice(0, 2).toLocaleUpperCase("tr");
   return (
     <span

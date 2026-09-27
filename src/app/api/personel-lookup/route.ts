@@ -4,79 +4,89 @@ import { eq, and, gte, lte } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-/** Türkçe karakterleri küçük harfe ve temel harflere normalize eder (esnek eşleşme için). */
-function normalizeTr(s: string): string {
-  return String(s ?? "")
-    .replace(/İ/g, "i")
-    .replace(/I/g, "ı")
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ş/g, "s")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ö/g, "o")
-    .replace(/ı/g, "i")
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
+const trUpper = (s: string) =>
+  s.replace(/i/g, "İ").replace(/ı/g, "I").toUpperCase().trim();
+
+/**
+ * Karşılaştırma için Türkçe harf katlama: "Çelik", "ÇELIK", "celik", "ÇELİK"
+ * hepsi aynı kabul edilir (klavye / Türkçe karakter farkı giriş engellemesin).
+ */
+function fold(s: string): string {
+  return trUpper(s)
+    .replace(/Ç/g, "C").replace(/Ğ/g, "G").replace(/[İI]/g, "I")
+    .replace(/Ö/g, "O").replace(/Ş/g, "S").replace(/Ü/g, "U")
+    .replace(/\s+/g, " ").trim();
 }
 
-/** Personel isim/soyisim parçalarını çıkartır. */
-function namePartsOf(p: { name?: string | null; fullName?: string | null }): string[] {
-  const out: string[] = [];
+/** TC biçimi: 11 hane, 0 ile başlamaz. (Algoritma kontrolü giriş engeli değildir —
+ *  kayıttaki TC ile birebir eşleşme aranır.) */
+function isTcFormat(tc: string): boolean {
+  return /^[1-9]\d{10}$/.test(tc);
+}
+
+/**
+ * Hız sınırı — YALNIZCA HATALI denemeler sayılır.
+ * (Eski sürüm başarılı sorguları ve ay değiştirmeyi de sayıyordu; kullanıcı
+ *  4-5 ay gezinince 15 dk kilitleniyordu.)
+ */
+const failures = new Map<string, { count: number; first: number }>();
+const WINDOW = 15 * 60 * 1000;
+const MAX_FAILS = 8;
+function isLocked(key: string): boolean {
+  const rec = failures.get(key);
+  if (!rec) return false;
+  if (Date.now() - rec.first > WINDOW) { failures.delete(key); return false; }
+  return rec.count >= MAX_FAILS;
+}
+function recordFailure(key: string) {
+  const now = Date.now();
+  const rec = failures.get(key);
+  if (!rec || now - rec.first > WINDOW) failures.set(key, { count: 1, first: now });
+  else rec.count += 1;
+}
+function clearFailures(key: string) { failures.delete(key); }
+
+/** Her hatada aynı mesaj: hangi bilginin yanlış olduğu sızdırılmaz. */
+const GENERIC = "Bilgiler eşleşmedi. TC Kimlik No ve soyadınızı kontrol edin.";
+const LOCKED = "Çok fazla hatalı deneme yapıldı. Lütfen 15 dakika sonra tekrar deneyin.";
+
+/** Soyadı veya tam ad ile eşleşme (Türkçe karakter duyarsız). */
+function nameMatches(p: { name?: string | null; fullName?: string | null }, input: string): boolean {
+  const q = fold(input);
+  if (q.length < 2) return false;
   for (const v of [p.fullName, p.name]) {
-    if (!v) continue;
-    const parts = v.trim().split(/\s+/).filter(Boolean);
-    out.push(...parts);
-    if (parts.length > 1) {
-      out.push(parts[parts.length - 1]); // soyadı
-      out.push(parts.join(" ")); // tam adı
-      out.push(parts.slice(1).join(" ")); // 2+ isim varsa soyadlar
-    }
-  }
-  return [...new Set(out)];
-}
-
-/** Soyad veya isim eşleşmesini test eder. */
-function matchesSurname(person: { name?: string | null; fullName?: string | null }, input: string): boolean {
-  const cleanInput = normalizeTr(input);
-  if (!cleanInput || cleanInput.length < 2) return false;
-  const parts = namePartsOf(person);
-  for (const part of parts) {
-    const cleanPart = normalizeTr(part);
-    if (cleanPart === cleanInput) return true;
-    if (cleanPart.endsWith(cleanInput) || cleanInput.endsWith(cleanPart)) return true;
+    const full = fold(v ?? "");
+    if (!full) continue;
+    const parts = full.split(" ");
+    if (parts[parts.length - 1] === q) return true; // soyad
+    if (full === q) return true;                    // ad + soyad
   }
   return false;
 }
 
 /**
  * Şifresiz, salt-okunur personel sorgusu:
- * 11 haneli TC + soyad doğrulanırsa o kişinin kendi nöbet, izin ve puantaj verisi döner.
+ * TC + soyad doğrulanırsa yalnızca o kişinin kendi nöbet, izin ve puantaj verisi döner.
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json();
     const tc = String(body.tcNo ?? "").replace(/\D/g, "");
-    const surname = String(body.surname ?? "").trim();
+    const surname = String(body.surname ?? "");
+    const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "yerel";
+    const key = `${ip}|${tc || "bos"}`;
 
-    if (!tc || tc.length !== 11) {
-      return Response.json({ error: "Lütfen 11 haneli TC Kimlik Numaranızı girin." }, { status: 400 });
-    }
-    if (!surname || surname.length < 2) {
-      return Response.json({ error: "Lütfen en az 2 karakterden oluşan soyadınızı girin." }, { status: 400 });
-    }
+    if (isLocked(key)) return Response.json({ error: LOCKED }, { status: 429 });
+    if (!isTcFormat(tc) || fold(surname).length < 2) { recordFailure(key); return err(); }
 
     const matches = await db.select().from(personnel)
-      .where(and(eq(personnel.tcNo, tc), eq(personnel.isActive, true))).limit(5);
-
-    if (matches.length === 0) {
-      return Response.json({ error: "Girdiğiniz TC Kimlik Numarasına ait aktif personel kaydı bulunamadı." }, { status: 404 });
+      .where(and(eq(personnel.tcNo, tc), eq(personnel.isActive, true))).limit(2);
+    if (matches.length !== 1 || !nameMatches(matches[0], surname)) {
+      recordFailure(key);
+      return err();
     }
-
-    const person = matches.find(p => matchesSurname(p, surname));
-    if (!person) {
-      return Response.json({ error: "Girdiğiniz soyad sistemdeki personel kaydıyla eşleşmedi. Lütfen soyadınızı kontrol edin." }, { status: 400 });
-    }
+    const person = matches[0];
+    clearFailures(key); // başarılı giriş: sayaç sıfırlanır, ay gezinmesi serbest
 
     const nowDt = new Date();
     const year = Number(body.year) || nowDt.getFullYear();
@@ -102,9 +112,7 @@ export async function POST(req: Request) {
     return Response.json({
       person: {
         id: person.id,
-        name: person.name,
-        title: person.title,
-        personnelType: person.personnelType,
+        name: person.name, title: person.title, personnelType: person.personnelType,
         departmentName: dept[0]?.name ?? null,
         annualLeaveBalance: person.annualLeaveBalance,
         sickLeaveBalance: person.sickLeaveBalance,
@@ -112,25 +120,26 @@ export async function POST(req: Request) {
         hasAvatar: Boolean(person.avatarMime),
         avatarUpdatedAt: person.avatarUpdatedAt ? new Date(person.avatarUpdatedAt).toISOString() : null,
       },
-      year,
-      month,
+      year, month,
       schedules: schedules.sort((a, b) => a.scheduleDate.localeCompare(b.scheduleDate)),
       leaves: leaves
         .filter(l => l.status !== "CANCELLED")
         .map(l => ({
-          id: l.id,
-          leaveType: l.leaveType,
-          startDate: l.startDate,
-          endDate: l.endDate,
-          daysCount: l.daysCount,
-          status: l.status,
-          reason: l.reason,
+          id: l.id, leaveType: l.leaveType, startDate: l.startDate, endDate: l.endDate,
+          daysCount: l.daysCount, status: l.status, reason: l.reason,
         }))
         .sort((a, b) => b.startDate.localeCompare(a.startDate)).slice(0, 24),
       entries,
       holidays: hols,
     });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : "Sorgu sırasında beklenmeyen bir hata oluştu." }, { status: 500 });
+    if (e instanceof Error && e.message.startsWith("Çok fazla")) {
+      return Response.json({ error: e.message }, { status: 429 });
+    }
+    return Response.json({ error: GENERIC }, { status: 400 });
   }
+}
+
+function err() {
+  return Response.json({ error: GENERIC }, { status: 400 });
 }

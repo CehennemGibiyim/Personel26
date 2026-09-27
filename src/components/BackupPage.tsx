@@ -5,6 +5,7 @@ import {
   AlertTriangle, FileJson,
 } from "lucide-react";
 import { Btn, Spinner, EmptyState, Badge, cx } from "@/components/ui-kit";
+import { downloadFromApi } from "@/lib/api-client";
 
 type BackupRow = {
   id: string; filename: string; kind: string; recordCounts: Record<string, number> | null; createdAt: string;
@@ -92,9 +93,7 @@ export default function BackupPage() {
                 </div>
                 <Badge className={kl.cls}>{kl.label}</Badge>
                 <div className="flex-1" />
-                <a href={`/api/backup/${b.id}`} download>
-                  <Btn small><Download className="w-3.5 h-3.5" /> İndir</Btn>
-                </a>
+                <Btn small onClick={() => downloadFromApi(`/api/backup/${b.id}`, b.filename)}><Download className="w-3.5 h-3.5" /> İndir</Btn>
                 <Btn small variant="amber" onClick={() => restore(b)} disabled={busy}>
                   <RotateCcw className="w-3.5 h-3.5" /> Geri Yükle
                 </Btn>
