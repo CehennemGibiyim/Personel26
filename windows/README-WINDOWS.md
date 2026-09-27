@@ -5,6 +5,24 @@ olarak paketlemek için gereken her şeyi içerir.
 
 ---
 
+## En Kolay Yol: Paketleri GitHub'a Ürettirin (Windows'ta hiçbir şey kurmadan)
+
+Proje GitHub'a yüklendiyse iki paketi de GitHub'ın Windows sunucusu sizin için üretir:
+
+1. GitHub'da deponuzu açın → üstteki **Actions** sekmesi
+2. Soldan **"Windows Paketi"** → sağda **Run workflow** → yeşil **Run workflow**
+3. ~10-15 dakika sonra iş yeşil tik alır. İşe tıklayın → en altta **Artifacts** →
+   **Personel26-Windows** dosyasını indirin. İçinden iki dosya çıkar:
+   - `Personel26-Portable.zip` — taşınabilir paket
+   - `Personel26-Kurulum.exe` — kurulum sihirbazı
+
+**Sürüm yayınlamak için:** `git tag v1.0.0` ve `git push origin v1.0.0` komutlarını çalıştırın.
+Dosyalar otomatik olarak deponun **Releases** sayfasına eklenir; oradan herkes indirebilir.
+
+> Actions sekmesi görünmüyorsa: Settings → Actions → General → "Allow all actions" seçili olmalı.
+
+---
+
 ## Seçenek 1: Taşınabilir Paket (önerilen, en kolay)
 
 Tek klasör — kopyala, çift tıkla, çalışır. Kurulum, yönetici izni, internet gerekmez.
@@ -57,8 +75,11 @@ ve kaldırma desteğiyle.
 3. `windows\installer.iss` dosyasını Inno Setup Compiler ile açın → **Compile**.
 4. Çıktı: `windows\Personel26-Kurulum.exe` — dağıtabilirsiniz.
 
-Kurulum `C:\Program Files\Personel26` altına yapılır; kaldırma sırasında
-veritabanının silinip silinmeyeceği kullanıcıya sorulur.
+Kurulum **yönetici izni istemeden** kullanıcı klasörüne yapılır
+(`%LOCALAPPDATA%\Programs\Personel26`). Bu bilinçli bir tercih: Program Files'a
+kurulursa normal kullanıcı veritabanı klasörünü oluşturamaz. Başlat menüsü ve
+masaüstü kısayolları eklenir; kaldırma sırasında veritabanının silinip
+silinmeyeceği kullanıcıya sorulur.
 
 ---
 

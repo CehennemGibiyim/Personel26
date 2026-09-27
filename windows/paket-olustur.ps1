@@ -31,6 +31,10 @@ New-Item -ItemType Directory -Force -Path $Cache | Out-Null
 
 # ---- 1) Uygulamayı derle ----
 Write-Host "==> [1/5] Uygulama derleniyor (npm ci + next build)..." -ForegroundColor Cyan
+# Test aracı puppeteer'ın ~170 MB Chrome indirmesini atla (pakette gerekmez)
+$env:PUPPETEER_SKIP_DOWNLOAD = "true"
+# Derleme sırasında veritabanına bağlanılmaz; yalnızca değişkenin var olması gerekir
+if (-not $env:DATABASE_URL) { $env:DATABASE_URL = "postgresql://derleme:derleme@127.0.0.1:5433/derleme" }
 Push-Location $Root
 if (Test-Path "package-lock.json") { npm ci } else { npm install }
 npm run build
@@ -64,6 +68,9 @@ Copy-Item "$Root\.next\standalone\*" "$Out\app\" -Recurse -Force
 New-Item -ItemType Directory -Force -Path "$Out\app\.next\static" | Out-Null
 Copy-Item "$Root\.next\static\*" "$Out\app\.next\static\" -Recurse -Force
 if (Test-Path "$Root\public") { Copy-Item "$Root\public" "$Out\app\public" -Recurse -Force }
+# GitHub Pages sürümüne ait dosyalar Windows paketinde gerekmez
+Remove-Item "$Out\app\public\pglite" -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item "$Out\app\public\schema.sql" -Force -ErrorAction SilentlyContinue
 
 # 4b) Node (yalnızca node.exe yeterli)
 $NodeTmp = Join-Path $Cache "node-extract"

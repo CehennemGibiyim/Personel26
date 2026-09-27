@@ -14,18 +14,22 @@
 #define PortableDir "..\Personel26-Portable"
 
 [Setup]
-AppId={{7E1B2A64-9C3D-4B8F-A2E5-P26PUANTAJ01}
+AppId={{7E1B2A64-9C3D-4B8F-A2E5-1F26A0B3C4D5}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf}\{#AppName}
+; Kullanıcı klasörüne kurulur (%LOCALAPPDATA%\Programs\Personel26):
+; veritabanı data\ klasörüne yazabilmek için yönetici izni gerekmez.
+; (Program Files'a kurulursa normal kullanıcı data\ oluşturamaz.)
+DefaultDirName={userpf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=.
 OutputBaseFilename=Personel26-Kurulum
 Compression=lzma2/max
 SolidCompression=yes
+ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 WizardStyle=modern
 UninstallDisplayName={#AppName} — Puantaj ve Nöbet Yönetimi
 ; Kaldırırken veritabanını SİLME (data\ klasörü korunur)
