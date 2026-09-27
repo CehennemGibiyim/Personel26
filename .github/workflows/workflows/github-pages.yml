@@ -1,0 +1,77 @@
+# ============================================================
+#  Personel26 — GitHub Pages'e otomatik yayın
+#  Her `git push` (main dalı) sonrası tam uygulama statik olarak derlenir ve
+#  https://KULLANICI.github.io/DEPO-ADI/ adresinde yayınlanır.
+#
+#  Tek seferlik ayar: GitHub → Settings → Pages → Build and deployment →
+#  Source: "GitHub Actions" seçin.
+#
+#  Bu sürümde veritabanı tarayıcının içinde çalışır (PGlite / IndexedDB):
+#  her kullanıcının verisi kendi tarayıcısında saklanır.
+# ============================================================
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      STATIC_EXPORT: "1"
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Node.js kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Alt yolu belirle (kullanıcı sitesi ise boş)
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          if [[ "$REPO" == *.github.io ]]; then BASE=""; else BASE="/$REPO"; fi
+          echo "PAGES_BASE_PATH=$BASE" >> "$GITHUB_ENV"
+          echo "Yayın alt yolu: '$BASE'"
+
+      - name: Tarayıcı veritabanı dosyalarını hazırla (PGlite + şema)
+        run: node scripts/prepare-static.mjs
+
+      - name: Statik siteyi derle
+        run: npx next build
+
+      - name: Jekyll'i devre dışı bırak (_next klasörü için)
+        run: touch out/.nojekyll
+
+      - name: Yayın paketini yükle
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: GitHub Pages'e yayınla
+        id: deployment
+        uses: actions/deploy-pages@v4
