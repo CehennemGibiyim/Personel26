@@ -42,7 +42,16 @@ npm run dev                 # http://localhost:3000
 ```
 
 Üretim: `npm run build && npm start`
-İlk açılışta örnek veriler (3 servis, 15 personel, 6 aylık nöbet geçmişi) otomatik yüklenir.
+
+- `next build` artık `DATABASE_URL` olmadan da tamamlanır (CI/Windows paketleme için).
+- Uygulamayı **çalıştırırken** veritabanı gerekir: `.env` dosyasında `DATABASE_URL` tanımlayın.
+- GitHub Pages yalnızca statik tanıtım sayfasını sunar; canlı sistem için Vercel + PostgreSQL kurulumuna bakın: **[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**.
+- İlk açılışta örnek veriler (3 servis, 15 personel, 6 aylık nöbet geçmişi) otomatik yüklenir.
+
+## Web'de Yayınlama (GitHub Pages / Vercel)
+
+GitHub Pages'te tanıtım sayfası, Vercel + Neon ile canlı tam sistem:
+**[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**
 
 ## Windows Paketi (Portable + Kurulum)
 
@@ -54,48 +63,6 @@ powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
 
 Ayrıntılar ve `Personel26-Kurulum.exe` üretimi için:
 **[windows/README-WINDOWS.md](windows/README-WINDOWS.md)**
-
-## GitHub Pages'te Web Sitesi Olarak Yayın
-
-Tam sistem GitHub Pages'te **sunucusuz** çalışır: veritabanı tarayıcının içinde çalışan
-gerçek PostgreSQL'dir ([PGlite](https://pglite.dev), WebAssembly). Tüm API kodu aynı
-kalır; `/api/*` istekleri tarayıcı içinde işlenir. Puantaj, nöbet, şablon, izin, personel
-(fotoğraflı), Excel/yazdırma, yedekleme ve `/personel` sorgu ekranı çalışır.
-
-### Yayına alma (tek seferlik, 3 adım)
-
-1. Projeyi GitHub'a gönderin: `git push`
-2. GitHub → deponuz → **Settings → Pages → Build and deployment → Source: "GitHub Actions"**
-3. **Actions** sekmesinde "GitHub Pages" işi yeşil tik alınca (~2-3 dk) site hazırdır:
-   `https://KULLANICI.github.io/DEPO-ADI/`
-
-Sonraki her `git push` siteyi otomatik günceller.
-(Özel/private depolarda Pages, ücretli GitHub planı gerektirir; açık depolarda ücretsizdir.)
-
-### Bu sürümün bilmeniz gereken özelliği
-
-- **Veriler her kullanıcının kendi tarayıcısında saklanır** (IndexedDB). Başka bilgisayar
-  veya tarayıcı kendi ayrı verisiyle açılır; ilk açılışta örnek veriler kurulur.
-- Tarayıcı verilerini (site verileri/çerezler) temizlemek kayıtları siler.
-  **Yedekleme → Şimdi Yedek Al → İndir** ile JSON yedek almayı alışkanlık edinin.
-- Ekip olarak **ortak veriyle** çalışmak için Windows paketini (tek sunucu, ağdan erişim)
-  veya Vercel + Neon kurulumunu kullanın.
-
-### Yerelde deneme
-
-```bash
-node scripts/prepare-static.mjs
-STATIC_EXPORT=1 PAGES_BASE_PATH=/Personel26 npx next build     # → out/
-# out/ klasörünü /Personel26/ altında yayınlayıp test edin:
-node scripts/test-github-pages.mjs http://127.0.0.1:8088/Personel26/
-```
-
-### Ortak veriyle internetten kullanım (isteğe bağlı)
-
-[Vercel](https://vercel.com) (uygulama) + [Neon](https://neon.tech) (PostgreSQL), ikisi de
-ücretsiz başlangıç planlı: Vercel'de GitHub deposunu içe aktarın, `DATABASE_URL` ortam
-değişkenine Neon bağlantı adresini girin, bir kez `npx drizzle-kit push` çalıştırın.
-**Kurum içi kullanım için önerilen yol Windows paketidir** (aşağıda).
 
 ## Proje Yapısı
 

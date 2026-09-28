@@ -29,12 +29,9 @@ Hedef PC’de **`Personel26-Baslat.bat`** çalıştırın. İlk açılışta ver
 
 Verileriniz `data\` klasöründedir. Yedek = bu klasörü kopyalamak.
 
-## GitHub Pages ile web sitesi olur mu?
+## GitHub’dan web sitesi olarak yayınlama
 
-**Hayır.** Bu proje Next.js + PostgreSQL tam yığın bir uygulamadır. GitHub Pages yalnızca statik HTML/CSS/JS barındırır; sunucu, veritabanı ve API route’ları çalışmaz.
+- **GitHub Pages** → arayüzün tanıtım sayfası (hazır iş akışı: `.github/workflows/pages.yml`)
+- **Vercel + Neon** → canlı, veritabanlı tam sistem (ücretsiz katman)
 
-GitHub’a yükledikten sonra:
-
-- Kaynak kod görünür ve paylaşılır.
-- Canlı web için Vercel, Railway, kendi sunucunuz veya Windows portable paket gerekir.
-- Windows’ta kullanım için yukarıdaki kurulum paketi hazırlanmıştır.
+Adım adım anlatım: **[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**
