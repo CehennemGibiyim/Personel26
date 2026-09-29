@@ -24,9 +24,12 @@ export async function downloadPanelPreview(): Promise<{ ok: boolean; error?: str
     setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
     return { ok: true };
   } catch (e) {
-    // Yedek: yeni sekmede statik dosyayı aç (Ctrl/Cmd+S ile kaydedilebilir)
+    // Yedek: yeni sekmede statik dosyayı aç (Ctrl/Cmd+S ile kaydedilebilir).
+    // Statik (GitHub Pages) sürümde dosya adresi site köküne göre hesaplanır.
     try {
-      window.open("/panel-onizleme.html", "_blank", "noopener");
+      const bridge = (window as unknown as { __p26?: { assetUrl?: (p: string) => string } }).__p26;
+      const target = bridge?.assetUrl ? bridge.assetUrl("panel-onizleme.html") : "/panel-onizleme.html";
+      window.open(target, "_blank", "noopener");
     } catch {
       /* yok say */
     }

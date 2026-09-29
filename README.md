@@ -45,13 +45,20 @@ npm run dev                 # http://localhost:3000
 
 - `next build` artık `DATABASE_URL` olmadan da tamamlanır (CI/Windows paketleme için).
 - Uygulamayı **çalıştırırken** veritabanı gerekir: `.env` dosyasında `DATABASE_URL` tanımlayın.
-- GitHub Pages yalnızca statik tanıtım sayfasını sunar; canlı sistem için Vercel + PostgreSQL kurulumuna bakın: **[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**.
+- **GitHub Pages'te panelin tamamı çalışır**: tarayıcı içi PostgreSQL (PGlite/WASM) sayesinde sunucu gerekmez, veriler tarayıcıda (IndexedDB) saklanır. Kurulum: **[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**.
+- Kurumda birden çok kişi aynı veriyi kullanacaksa Vercel + Neon (sunucu tarafı PostgreSQL) kurulumunu kullanın.
 - İlk açılışta örnek veriler (3 servis, 15 personel, 6 aylık nöbet geçmişi) otomatik yüklenir.
 
 ## Web'de Yayınlama (GitHub Pages / Vercel)
 
-GitHub Pages'te tanıtım sayfası, Vercel + Neon ile canlı tam sistem:
-**[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**
+- **GitHub Pages** → panelin tamamı (sunucusuz; veritabanı tarayıcıda çalışır)
+- **Vercel + Neon** → ortak veritabanlı, çok kullanıcılı canlı sistem
+
+Adım adım kurulum: **[WEB-YAYINLAMA.md](WEB-YAYINLAMA.md)**
+
+> ⚠ GitHub Pages'in paneli yayınlaması için depo ayarında **Settings → Pages →
+> Build and deployment → Source: `GitHub Actions`** seçili olmalıdır. "Deploy from
+> a branch" seçiliyken GitHub yalnızca bu README dosyasını gösterir.
 
 ## Windows Paketi (Portable + Kurulum)
 

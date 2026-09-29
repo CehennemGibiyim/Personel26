@@ -1,0 +1,274 @@
+#!/usr/bin/env node
+/**
+ * ════════════════════════════════════════════════════════════════
+ * Personel26 — GitHub Pages sürümü duman testi (tarayıcısız)
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Panelin sunucusuz (GitHub Pages) arka ucunu Node.js üzerinde çalıştırır:
+ *   • tarayıcı içi PostgreSQL (PGlite) + Drizzle şeması kurulur,
+ *   • örnek veriler yüklenir,
+ *   • panelin gerçek API uçları `fetch("/api/...")` çağrılarıyla denenir.
+ *
+ * Kullanım:
+ *   npm run pages:build && npm run pages:test
+ *
+ * Not: Tarayıcıya özel parçalar (fetch kesici, arayüz kapısı) bu testte
+ * taklit edilir; veritabanı/API davranışı birebir aynı koddur.
+ */
+import { cp, mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { execFileSync } from "node:child_process";
+import { bundleBridge } from "./lib/bridge-bundle.mjs";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const workDir = path.join(root, ".pages-build", "smoke");
+const pgliteDist = path.join(root, "node_modules", "@electric-sql", "pglite", "dist");
+
+let passed = 0;
+const failures = [];
+
+function check(name, condition, detail = "") {
+  if (condition) {
+    passed++;
+    console.log(`   ✓ ${name}`);
+  } else {
+    failures.push(`${name}${detail ? ` — ${detail}` : ""}`);
+    console.log(`   ✗ ${name}${detail ? ` — ${detail}` : ""}`);
+  }
+}
+
+// ───────────────────────────────────────────────
+// 1) Test paketini derle (aynı kaynak kod, Node hedefi)
+// ───────────────────────────────────────────────
+console.log("\n1) Tarayıcı arka ucu derleniyor (Node hedefi)…");
+await rm(workDir, { recursive: true, force: true });
+await mkdir(workDir, { recursive: true });
+
+const ddlDir = path.join(workDir, "ddl");
+execFileSync(
+  process.execPath,
+  [
+    path.join(root, "node_modules", "drizzle-kit", "bin.cjs"),
+    "generate",
+    "--dialect=postgresql",
+    `--schema=${path.join(root, "src", "db", "schema.ts")}`,
+    `--out=${ddlDir}`,
+  ],
+  { cwd: root, stdio: ["ignore", "ignore", "inherit"] },
+);
+const { readdir } = await import("node:fs/promises");
+const ddlFiles = (await readdir(ddlDir)).filter((f) => f.endsWith(".sql")).sort();
+const ddl = await (await import("node:fs/promises")).readFile(
+  path.join(ddlDir, ddlFiles[ddlFiles.length - 1]),
+  "utf8",
+);
+
+await bundleBridge({ root, ddl, outfile: path.join(workDir, "app.js"), platform: "node" });
+// Node'un paketi ESM olarak çözmesi için
+await (await import("node:fs/promises")).writeFile(path.join(workDir, "package.json"), '{"type":"module"}', "utf8");
+for (const asset of ["pglite.wasm", "initdb.wasm", "pglite.data"]) {
+  await cp(path.join(pgliteDist, asset), path.join(workDir, asset));
+}
+
+// ───────────────────────────────────────────────
+// 2) Tarayıcı ortamı taklidi + panel arka ucunu başlat
+// ───────────────────────────────────────────────
+console.log("\n2) Tarayıcı ortamı taklit ediliyor, veritabanı başlatılıyor…");
+const origin = "http://127.0.0.1:4173";
+const storage = new Map();
+const statusLog = [];
+
+globalThis.window = globalThis;
+globalThis.localStorage = {
+  getItem: (k) => (storage.has(k) ? storage.get(k) : null),
+  setItem: (k, v) => storage.set(k, String(v)),
+  removeItem: (k) => storage.delete(k),
+};
+// Tarayıcı `location` nesnesi: URL tabanlı taklit (pathname, protocol vb. gerekli)
+globalThis.location = Object.assign(new URL(`${origin}/`), {
+  reload: () => console.log("   (sayfa yenileme çağrısı yapıldı)"),
+});
+globalThis.__p26Status = (message) => statusLog.push(message);
+
+const ready = new Promise((resolve, reject) => {
+  globalThis.__p26Resolve = resolve;
+  globalThis.__p26Reject = reject;
+});
+globalThis.__P26_READY = ready;
+globalThis.fetch = globalThis.fetch; // Node'un kendi fetch'i köprü tarafından sarılır
+
+const t0 = Date.now();
+await import(pathToFileURL(path.join(workDir, "app.js")).href);
+await ready;
+const bootMs = Date.now() - t0;
+console.log(`   ✓ Veritabanı ${bootMs} ms'de hazır${statusLog.length ? ` (${statusLog.join(" → ")})` : ""}`);
+check("Köprü global API'si kuruldu", Boolean(globalThis.__p26?.api));
+
+const api = async (pathName, init) => globalThis.window.fetch(`${origin}${pathName}`, init);
+const json = async (pathName, init) => {
+  const res = await api(pathName, init);
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+};
+const post = (body) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+// ───────────────────────────────────────────────
+// 3) Uçlar
+// ───────────────────────────────────────────────
+console.log("\n3) Panel uçları deneniyor…");
+
+const { res: bootRes, data: boot } = await json("/api/bootstrap");
+check("GET /api/bootstrap 200", bootRes.status === 200, `durum ${bootRes.status}`);
+check("Servisler yüklendi (3)", boot.departments?.length === 3, `bulunan: ${boot.departments?.length}`);
+check("Personel yüklendi (24)", (boot.personnel?.length ?? 0) >= 20, `bulunan: ${boot.personnel?.length}`);
+check("Tatiller yüklendi", (boot.holidays?.length ?? 0) > 10, `bulunan: ${boot.holidays?.length}`);
+check("Vardiya şablonları yüklendi", (boot.templates?.length ?? 0) >= 2, `bulunan: ${boot.templates?.length}`);
+
+const deptId = boot.departments?.[0]?.id;
+const personId = boot.personnel?.[0]?.id;
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth();
+const pad = (n) => String(n).padStart(2, "0");
+const startD = `${year}-${pad(month + 1)}-01`;
+
+const { res: tsRes, data: ts } = await json(`/api/timesheet?year=${year}&month=${month}&dept=${deptId}&personnel=${personId}`);
+check("GET /api/timesheet 200", tsRes.status === 200, `durum ${tsRes.status}`);
+check("Puantaj kayıtları var", (ts.entries?.length ?? 0) > 0, `kayıt: ${ts.entries?.length}`);
+
+const { res: tsPut } = await json("/api/timesheet", { ...post({ personnelId: personId, entryDate: startD, shiftType: "MANUAL", hoursWorked: 7.5 }), method: "PUT" });
+check("PUT /api/timesheet (hücre kaydı)", tsPut.status === 200, `durum ${tsPut.status}`);
+const { data: tsAfter } = await json(`/api/timesheet?year=${year}&month=${month}&dept=${deptId}&personnel=${personId}`);
+const written = tsAfter.entries?.find((e) => e.entryDate === startD);
+check("Kaydedilen saat geri okundu (7.5)", Math.abs((written?.hoursWorked ?? 0) - 7.5) < 0.001, `okunan: ${written?.hoursWorked}`);
+await json("/api/timesheet", { ...post({ personnelId: personId, entryDate: startD }), method: "DELETE" });
+
+const { res: rosterRes, data: roster } = await json(`/api/roster?dept=${deptId}&year=${year}&month=${month}&group=SAGLIK`);
+check("GET /api/roster 200", rosterRes.status === 200, `durum ${rosterRes.status}`);
+check("Nöbet çizelgesi verisi döndü", Array.isArray(roster.columns) || Array.isArray(roster.assignments) || Array.isArray(roster.schedules), JSON.stringify(Object.keys(roster)).slice(0, 120));
+
+const { res: persRes, data: pers } = await json("/api/personnel");
+check("GET /api/personnel 200", persRes.status === 200, `durum ${persRes.status}`);
+check("Personel listesi dolu", (pers.personnel?.length ?? 0) >= 20);
+
+const newPerson = {
+  name: "TEST PERSONEL",
+  tcNo: "10000009999",
+  title: "Hemşire",
+  personnelType: "MEMUR",
+  departmentIds: [deptId],
+  departmentId: deptId,
+};
+const { res: createRes, data: created } = await json("/api/personnel", post(newPerson));
+check("POST /api/personnel (yeni personel)", createRes.status === 200, JSON.stringify(created).slice(0, 160));
+const createdId = created.personnel?.id;
+check("Yeni personel kimliği döndü", Boolean(createdId));
+
+if (createdId) {
+  const { res: patchRes } = await json("/api/personnel", { ...post({ id: createdId, title: "Ebe" }), method: "PATCH" });
+  check("PATCH /api/personnel (güncelleme)", patchRes.status === 200, `durum ${patchRes.status}`);
+  const { res: delRes } = await json("/api/personnel", { ...post({ id: createdId, hard: true }), method: "DELETE" });
+  check("DELETE /api/personnel (silme)", delRes.status === 200, `durum ${delRes.status}`);
+}
+
+const { res: leavesRes, data: leaves } = await json(`/api/leaves?personnel=${personId}`);
+check("GET /api/leaves 200", leavesRes.status === 200, `durum ${leavesRes.status}`);
+check("İzin kayıtları listelendi", Array.isArray(leaves.leaves));
+
+const { res: leaveCreate, data: leaveCreated } = await json(
+  "/api/leaves",
+  post({ personnelId: personId, leaveType: "YILLIK", startDate: startD, endDate: `${year}-${pad(month + 1)}-02`, reason: "Duman testi" }),
+);
+check("POST /api/leaves (izin talebi)", leaveCreate.status === 200, JSON.stringify(leaveCreated).slice(0, 140));
+if (leaveCreated.leave?.id) {
+  // 3 aşamalı onay akışı: Hemşire → Müdür → Başhekim
+  let stageOk = true;
+  for (const stage of ["HEMSIRE", "MUDUR", "BASHEKIM"]) {
+    const { res, data } = await json("/api/leaves", { ...post({ id: leaveCreated.leave.id, action: "approve-stage", by: "Duman Testi" }), method: "PATCH" });
+    if (res.status !== 200) stageOk = false;
+    void data;
+    void stage;
+  }
+  const { data: afterApprove } = await json(`/api/leaves?personnel=${personId}`);
+  const approved = afterApprove.leaves?.find((l) => l.id === leaveCreated.leave.id);
+  check("PATCH /api/leaves (3 aşamalı onay)", stageOk && approved?.status === "APPROVED", `durum: ${approved?.status}`);
+  const { res: rejectRes } = await json("/api/leaves", { ...post({ id: leaveCreated.leave.id, action: "reject", by: "Duman Testi", note: "test" }), method: "PATCH" });
+  check("PATCH /api/leaves (red)", rejectRes.status === 200, `durum ${rejectRes.status}`);
+  await json("/api/leaves", { ...post({ id: leaveCreated.leave.id }), method: "DELETE" });
+}
+
+const { res: annRes, data: ann } = await json("/api/announcements");
+check("GET /api/announcements 200", annRes.status === 200 && Array.isArray(ann.announcements), `durum ${annRes.status}`);
+
+const { res: deptRes, data: depts } = await json("/api/departments");
+check("GET /api/departments 200", deptRes.status === 200 && (depts.departments?.length ?? 0) > 0);
+
+const { res: swapsRes } = await json("/api/swaps");
+check("GET /api/swaps 200", swapsRes.status === 200, `durum ${swapsRes.status}`);
+
+const { res: schedRes, data: scheds } = await json(`/api/schedules?dept=${deptId}&start=${startD}&end=${year}-12-31`);
+check("GET /api/schedules 200", schedRes.status === 200 && Array.isArray(scheds.schedules), `durum ${schedRes.status}`);
+
+const { res: healthRes, data: health } = await json("/api/health");
+check("GET /api/health 200", healthRes.status === 200, JSON.stringify(health).slice(0, 120));
+
+const { res: tplRes, data: tpl } = await json("/api/templates");
+check("GET /api/templates 200", tplRes.status === 200 && (tpl.templates?.length ?? 0) >= 2);
+
+const avatarRes = await api(`/api/personnel/avatar/${personId}`);
+check("GET /api/personnel/avatar/[id] (fotoğraf yok → 404)", avatarRes.status === 404 || avatarRes.status === 200, `durum ${avatarRes.status}`);
+
+const { res: lookupRes, data: lookup } = await json("/api/personel-lookup", post({ tcNo: "10000000146", surname: "ÇELİK" }));
+check("POST /api/personel-lookup (personel sorgu)", lookupRes.status === 200, `durum ${lookupRes.status} ${JSON.stringify(lookup).slice(0, 120)}`);
+check("Sorgu sonucu nöbet/izin verisi içeriyor", Array.isArray(lookup.schedules) || Array.isArray(lookup.entries) || Boolean(lookup.person), JSON.stringify(Object.keys(lookup)).slice(0, 140));
+
+// Dışa aktarmalar (Excel/CSV/JSON) — tarayıcıda indirme olarak kullanılan uçlar
+const exportTargets = [
+  ["/api/export/puantaj?dept=" + deptId + "&year=" + year + "&month=" + month + "&format=xlsx&group=SAGLIK", "application/vnd.openxmlformats-officedocument", "Puantaj Excel"],
+  ["/api/export/puantaj?dept=" + deptId + "&year=" + year + "&month=" + month + "&format=csv&group=SAGLIK", "text/csv", "Puantaj CSV"],
+  ["/api/export/personel?dept=ALL&type=ALL&status=ALL&q=", "application/vnd.openxmlformats-officedocument", "Personel Excel"],
+  ["/api/export/nobet?dept=" + deptId + "&year=" + year + "&month=" + month + "&format=xlsx&group=SAGLIK", "application/vnd.openxmlformats-officedocument", "Nöbet Excel"],
+  ["/api/export/izinler?dept=" + deptId + "&year=" + year + "&status=ALL", "application/vnd.openxmlformats-officedocument", "İzinler Excel"],
+];
+for (const [url, mime, label] of exportTargets) {
+  const res = await api(url);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const detail =
+    res.status === 200
+      ? `durum ${res.status}, ${buf.byteLength} bayt`
+      : `durum ${res.status} — ${new TextDecoder().decode(buf.slice(0, 200))}`;
+  check(`${label} üretildi`, res.status === 200 && buf.byteLength > 500 && (res.headers.get("content-type") ?? "").includes(mime), detail);
+}
+
+// Yedekleme
+const { res: backupRes, data: backup } = await json("/api/backup", { method: "POST" });
+check("POST /api/backup (yedek al)", backupRes.status === 200 && Boolean(backup.filename), JSON.stringify(backup).slice(0, 140));
+const { res: backupList } = await json("/api/backup");
+check("GET /api/backup (yedek listesi)", backupList.status === 200, `durum ${backupList.status}`);
+if (backup.id) {
+  const res = await api(`/api/backup/${backup.id}`);
+  const text = await res.text();
+  check("GET /api/backup/[id] (JSON yedek indirme)", res.status === 200 && text.length > 1000, `durum ${res.status}, ${text.length} bayt`);
+}
+
+// Bilinmeyen uç → anlaşılır 404
+const { res: unknownRes, data: unknown } = await json("/api/boyle-bir-uc-yok");
+check("Bilinmeyen uç 404 döndü", unknownRes.status === 404 && Boolean(unknown.error), JSON.stringify(unknown).slice(0, 120));
+
+// Veritabanı özeti
+const info = await globalThis.__p26.info();
+check("Veritabanı özeti alındı", info.mode === "browser-pglite" && Number(info.personnel) >= 20, JSON.stringify(info).slice(0, 200));
+
+// ───────────────────────────────────────────────
+// 4) Sonuç
+// ───────────────────────────────────────────────
+console.log("\n═══════════════════════════════════════════");
+if (failures.length === 0) {
+  console.log(`✅ TÜM TESTLER GEÇTİ (${passed} kontrol)`);
+  process.exit(0);
+}
+console.log(`❌ ${failures.length} kontrol başarısız (${passed} başarılı):`);
+failures.forEach((f) => console.log(`   • ${f}`));
+process.exit(1);

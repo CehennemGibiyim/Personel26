@@ -26,7 +26,11 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 
-# GitHub Pages derleme çıktıları (scripts/prepare-static.mjs üretir)
+# GitHub Pages derleme çıktıları (scripts/pages-build.mjs üretir)
+.next-pages/
+.pages-build/
+.pg-ddl/
+_site/
 public/pglite/
 public/schema.sql
 .next-static/

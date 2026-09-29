@@ -1,37 +1,80 @@
-# Personel26 — GitHub'dan Web Sitesi Olarak Yayınlama
+# Personel26 — Web'de Yayınlama
 
-İki yol vardır. İkisi birlikte de kullanılabilir.
+İki yol var; ihtiyaca göre biri ya da ikisi birlikte kullanılabilir.
 
-| | A) GitHub Pages | B) Vercel + Neon (önerilen, canlı sistem) |
+| | A) GitHub Pages — **tam çalışan panel** | B) Vercel + Neon — ortak (çok kullanıcılı) sistem |
 |---|---|---|
-| Adres | `kullanici.github.io/personel26` | `personel26.vercel.app` (veya kendi alan adınız) |
-| Ne gösterir | Arayüzün **görsel tanıtımı** (statik) | **Tam çalışan sistem**: giriş, kayıt, puantaj, nöbet, yazdırma, Excel |
-| Veritabanı | Yok | Neon PostgreSQL (ücretsiz katman) |
-| Maliyet | Ücretsiz | Ücretsiz katman yeterli |
-| Kurulum süresi | ~2 dk | ~10 dk |
+| Adres | `https://KULLANICI.github.io/REPO/` | `https://personel26-xxx.vercel.app` |
+| Ne çalışır | **Panelin tamamı**: personel, puantaj, nöbet, izin, yazdırma, Excel/CSV, yedekleme | Aynısı |
+| Veritabanı | **Tarayıcının içinde** (PostgreSQL/WASM + IndexedDB) | Neon PostgreSQL (sunucuda, ortak) |
+| Veri paylaşımı | Yok — veriler yalnızca o tarayıcıda saklanır | Var — tüm kullanıcılar aynı veriyi görür |
+| Ek ücret / hesap | Gerekmez (yalnızca GitHub) | Ücretsiz katman yeterli |
+| İlk açılış | ~17 MB motor indirir (sonra önbellekten) | Hızlı |
 
-> **Neden GitHub Pages tek başına yetmez?** Pages yalnızca statik HTML barındırır.
-> Personel26 ise sunucu (API) + PostgreSQL veritabanı gerektiren tam yığın bir uygulamadır.
-> Bu yüzden Pages'te yalnızca tanıtım sayfası çalışır; canlı sistem için Vercel kullanılır.
-> Vercel, GitHub deponuza bağlanır ve her `git push`'ta siteyi otomatik günceller.
-
----
-
-## A) GitHub Pages — Tanıtım Sayfası
-
-Depoda hazır iş akışı var: `.github/workflows/pages.yml`
-
-1. Projeyi GitHub'a gönderin (`git push`).
-2. GitHub'da repo → **Settings → Pages**
-3. **Source** kısmında **GitHub Actions** seçin.
-4. **Actions** sekmesinde "GitHub Pages (tanıtım sayfası)" iş akışının yeşil tik aldığını görün.
-5. Siteniz: `https://KULLANICI-ADINIZ.github.io/REPO-ADI/`
-
-Her `git push` sonrası sayfa otomatik güncellenir.
+> **Özet:** Paneli hızlıca görmek/denemek veya tek kişisel kullanım için **GitHub Pages**
+> yeterlidir. Kurumda birden çok kişi aynı veriyi kullanacaksa **Vercel + Neon** kurun.
 
 ---
 
-## B) Vercel + Neon — Canlı, Tam Çalışan Sistem
+## A) GitHub Pages — panelin tamamı (tarayıcı içi veritabanı)
+
+Panel, sunucu gerektirmeyecek şekilde derlenir: API katmanı tarayıcıya taşınır ve
+gerçek PostgreSQL (PGlite/WASM) tarayıcıda çalışır; veriler tarayıcının IndexedDB
+deposunda saklanır. Böylece giriş, kayıt, puantaj, nöbet, izin, yazdırma ve
+Excel/CSV dışa aktarma dahil **her şey** `github.io` adresinde çalışır.
+
+### 1. Tek seferlik ayar (ÖNEMLİ)
+
+GitHub deposunda:
+
+**Settings → Pages → Build and deployment → Source: `GitHub Actions`**
+
+> Bu ayar yapılmazsa GitHub, deponun kök dizinini (README) yayınlar ve site
+> boş/metin görünür: `https://KULLANICI.github.io/REPO/` adresinde README çıkar.
+> "Deploy from a branch" seçeneği **seçili olmamalıdır.**
+
+### 2. Yayınlama
+
+`main` dalına yapılan her `git push` iş akışını (`.github/workflows/pages.yml`)
+otomatik çalıştırır:
+
+1. `npm ci` — bağımlılıklar
+2. `node scripts/pages-build.mjs` — DDL + tarayıcı veritabanı paketi + Next.js statik çıktısı → `_site/`
+3. `node scripts/pages-smoke-test.mjs` — tarayıcı içi veritabanı ve API uçları doğrulanır (42 kontrol)
+4. `_site/` GitHub Pages'e yüklenir
+
+Sonuç: `https://KULLANICI.github.io/REPO/`
+
+İlk açılışta tarayıcıya PostgreSQL motoru (~17 MB) indirilir; bu sırada
+"Tarayıcı veritabanı hazırlanıyor…" ekranı görünür. Sonraki açılışlar hızlıdır ve
+verileriniz tarayıcıda kalıcıdır.
+
+### 3. Yerelde deneme
+
+```bash
+npm run pages:build     # _site/ üretir (alt dizin: P26_BASE_PATH ile ayarlanır)
+npm run pages:serve     # http://127.0.0.1:4173/REPO/ adresinde sunar
+npm run pages:test      # tarayıcısız duman testi (veritabanı + tüm API uçları)
+```
+
+Alt dizin olmadan (kök alan adı / özel alan adı) denemek için:
+
+```bash
+P26_BASE_PATH= npm run pages:build && npm run pages:serve
+```
+
+### 4. Veriler hakkında
+
+- Veriler **yalnızca kullandığınız tarayıcıda** tutulur; başka bir cihaz/tarayıcı
+  kendi boş veritabanıyla başlar (örnek verilerle).
+- Paneli temizlemek için sağ alttaki **"Sıfırla"** düğmesini kullanın
+  (örnek veriler yeniden kurulur).
+- Şema değiştiğinde (yeni sürüm) tarayıcı veritabanı otomatik yenilenir.
+- Kişisel veriler (TC kimlik vb.) tarayıcıdan dışarı çıkmaz.
+
+---
+
+## B) Vercel + Neon — ortak, canlı sistem
 
 ### 1. Ücretsiz veritabanı (Neon)
 1. https://neon.tech → GitHub ile giriş → **New Project** (bölge: Frankfurt önerilir)
@@ -56,7 +99,10 @@ npx drizzle-kit push
 Birkaç dakika içinde `https://personel26-xxx.vercel.app` adresinde sistem açılır.
 İlk açılışta örnek veriler otomatik yüklenir (istemezseniz Personel Yönetimi'nden silebilirsiniz).
 
-> **Önemli:** `DATABASE_URL` artık derleme aşamasında zorunlu değildir; bu sayede GitHub Actions/Vercel derlemesi bağlantı adresi yokken çökmez. Ancak **canlı sitede** `DATABASE_URL` ayarını mutlaka Vercel → Settings → Environment Variables bölümüne ekleyin. Ayar yoksa sayfa/API açık bir veritabanı yapılandırma hatası verir; veritabanı gerektiren özellikler çalışmaz.
+> **Not:** `DATABASE_URL` derleme aşamasında zorunlu değildir; bu yüzden CI derlemeleri
+> bağlantı adresi yokken çökmez. Ancak **canlı sitede** mutlaka Vercel → Settings →
+> Environment Variables bölümüne ekleyin. Ayar yoksa API katmanı anlaşılır bir
+> veritabanı yapılandırma hatası döner.
 
 ### 4. Güncelleme
 Kodda değişiklik yapıp `git push` dediğinizde Vercel siteyi otomatik yeniden derler.
@@ -73,6 +119,7 @@ Sistem şu an **giriş ekranı olmadan** çalışır: adresi bilen herkes yönet
 - Bir sonraki geliştirme adımı olarak kullanıcı girişi (yönetici şifresi) ekletin.
 
 Personel verileri (TC Kimlik No dahil) kişisel veridir; KVKK gereği erişimi sınırlandırın.
+GitHub Pages sürümünde veriler tarayıcıda kaldığı için sunucuya hiçbir kayıt gönderilmez.
 
 ---
 

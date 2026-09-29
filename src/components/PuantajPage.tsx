@@ -14,6 +14,8 @@ import {
 import { STAFF_GROUP_META, type StaffGroup } from "@/lib/shared";
 import { getShiftMetrics, normalizeShiftCode, isKnownCode, getShiftRangeMetrics } from "@/lib/puantaj-engine";
 import { Btn, Spinner } from "@/components/ui-kit";
+import { downloadFromApi } from "@/lib/download";
+
 import { AddPersonnelModal, PersonnelManageModal, SignatureModal } from "@/components/modals";
 import PrintArea, { openPrintPreview } from "@/components/PrintArea";
 import PrintOptionsModal from "@/components/PrintOptionsModal";
@@ -272,11 +274,18 @@ export default function PuantajPage({
 
   // ═════ Dışa aktarma (sunucudan gerçek dosya indirimi) ═════
   function exportExcel() {
-    window.location.href = `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx&group=${staffGroup}`;
+    // Statik (GitHub Pages) sürümde de çalışması için fetch + blob ile indirilir.
+    void downloadFromApi(
+      `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx&group=${staffGroup}`,
+      "puantaj.xlsx",
+    ).catch(e => alert(e instanceof Error ? e.message : "İndirme başarısız"));
   }
 
   function exportCSV() {
-    window.location.href = `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=csv&group=${staffGroup}`;
+    void downloadFromApi(
+      `/api/export/puantaj?dept=${selectedDept}&year=${year}&month=${month}&format=csv&group=${staffGroup}`,
+      "puantaj.csv",
+    ).catch(e => alert(e instanceof Error ? e.message : "İndirme başarısız"));
   }
 
   // ═════ Tablo render ═════

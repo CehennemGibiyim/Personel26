@@ -6,6 +6,17 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
+/**
+ * base64 → bayt dizisi. `atob` hem Node.js (18+) hem tarayıcıda bulunduğu için
+ * GitHub Pages sürümünde de (Buffer olmadan) çalışır.
+ */
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 /** Personel profil fotoğrafını görsel olarak sunar (ETag + uzun önbellek). */
 export async function GET(req: Request, { params }: Params) {
   const { id } = await params;
@@ -23,8 +34,9 @@ export async function GET(req: Request, { params }: Params) {
     return new Response(null, { status: 304, headers: { ETag: etag } });
   }
 
-  const bytes = Uint8Array.from(Buffer.from(row.data, "base64"));
-  return new Response(bytes, {
+  const bytes = base64ToBytes(row.data);
+  const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return new Response(body, {
     headers: {
       "Content-Type": row.mime,
       "Content-Length": String(bytes.byteLength),

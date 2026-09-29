@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   Fingerprint, CalendarDays, Moon, Clock, ShieldCheck, KeyRound,
   HeartPulse, AlertCircle, LogOut, ArrowLeft, Sparkles, UserCheck,
@@ -170,9 +171,9 @@ export default function PersonelSelfService() {
             <ShieldCheck className="w-3 h-3" /> Bu ekran salt-okunurdur; şifre gerektirmez ve yalnızca kendi bilgilerinizi gösterir.
           </p>
           <div className="text-center">
-            <a href="/" className="text-sky-400/80 hover:text-sky-300 text-xs font-semibold inline-flex items-center gap-1 transition">
+            <Link href="/" className="text-sky-400/80 hover:text-sky-300 text-xs font-semibold inline-flex items-center gap-1 transition">
               <ArrowLeft className="w-3.5 h-3.5" /> Yönetim paneline dön
-            </a>
+            </Link>
           </div>
         </div>
       </div>
