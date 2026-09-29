@@ -1,15 +1,20 @@
 # ============================================================
-#  GitHub Pages — Personel26 TANITIM / ÖNİZLEME sayfası
-#  main dalına her push'ta statik arayüz önizlemesini yayınlar:
+#  GitHub Pages — Personel26 PANELİ (çalışan sürüm)
+#  main dalına her push'ta paneli derler ve yayınlar:
 #    https://KULLANICI.github.io/REPO/
 #
-#  NOT: GitHub Pages yalnızca statik dosya barındırır. Bu sayfa
-#  sistemin görsel tanıtımıdır (veri girişi yapılamaz). Canlı,
-#  veritabanlı tam sistem için WEB-YAYINLAMA.md → Vercel adımlarına bakın.
+#  Nasıl çalışır?
+#   • Next.js statik olarak dışa aktarılır (output: "export"),
+#   • Panelin API katmanı tarayıcıya taşınır: gerçek PostgreSQL
+#     (PGlite/WASM) tarayıcıda çalışır, veriler IndexedDB'de saklanır.
+#   • Böylece sunucu/veritabanı gerekmeden TÜM panel çalışır.
 #
-#  İlk kurulum: GitHub repo → Settings → Pages → Source: "GitHub Actions"
+#  ⚠ TEK SEFERLİK AYAR (zorunlu):
+#    Repo → Settings → Pages → Build and deployment
+#        Source: "GitHub Actions"  (branch seçeneği DEĞİL)
+#    Bu ayar yapılmazsa GitHub, deponun README'sini yayınlar ve panel görünmez.
 # ============================================================
-name: GitHub Pages (tanıtım sayfası)
+name: GitHub Pages (Personel26 paneli)
 
 on:
   push:
@@ -34,16 +39,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Statik önizlemeyi üret
-        run: node scripts/build-uipreview.mjs
+      - name: Bağımlılıkları kur
+        run: npm ci --no-audit --no-fund
+        env:
+          # Tarayıcı testleri için Chrome indirmeye gerek yok
+          PUPPETEER_SKIP_DOWNLOAD: "1"
 
-      - name: Yayın klasörünü hazırla
+      - name: Pages modunu denetle (uyarı)
         run: |
-          mkdir -p _site
-          cp public/panel-onizleme.html _site/index.html
-          cp src/app/icon.svg _site/favicon.svg 2>/dev/null || true
-          touch _site/.nojekyll
+          echo "### GitHub Pages ayarı" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ github.event.repository.name }}" = "${{ github.repository_owner }}.github.io" ]; then
+            echo "- Yayın adresi: https://${{ github.repository_owner }}.github.io/" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- Yayın adresi: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- **Önemli:** Settings → Pages → Source = *GitHub Actions* olmalı, aksi halde GitHub README'yi yayınlar." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Paneli derle (statik + tarayıcı içi veritabanı)
+        run: node scripts/pages-build.mjs
+
+      - name: Tarayıcı içi veritabanını doğrula (duman testi)
+        run: node scripts/pages-smoke-test.mjs
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -11,6 +11,9 @@ import {
 } from "@/lib/shared";
 import { STAFF_GROUP_META, STAFF_GROUP_ORDER, staffGroupOf, suggestedGroupForTitle, type StaffGroup } from "@/lib/shared";
 import { Btn, Modal, Field, TextInput, SelectInput, TextArea, Badge, Spinner, EmptyState, Avatar, cx } from "@/components/ui-kit";
+import { downloadFromApi } from "@/lib/download";
+import { useAvatarSrc } from "@/components/avatar-src";
+
 import { fileToSquareDataUrl } from "@/lib/image-resize";
 
 async function api(path: string, method: string, body?: unknown) {
@@ -107,7 +110,9 @@ export default function PersonnelPage({
 
   function exportExcel() {
     const params = new URLSearchParams({ dept: deptFilter, type: typeFilter, status: statusFilter, q: query.trim() });
-    window.location.href = `/api/export/personel?${params.toString()}`;
+    // Statik (GitHub Pages) sürümde de çalışması için fetch + blob ile indirilir.
+    void downloadFromApi(`/api/export/personel?${params.toString()}`, "personel_listesi.xlsx")
+      .catch(e => alert(e instanceof Error ? e.message : "İndirme başarısız"));
   }
 
   const hasFilter = query.trim() !== "" || deptFilter !== "ALL" || typeFilter !== "ALL" || statusFilter !== "ALL";
@@ -401,9 +406,8 @@ function PersonnelFormModal({ departments, defaultDeptId, initial, onClose, onSa
   const [avatar, setAvatar] = useState<string | null | undefined>(undefined);
   const [avatarBusy, setAvatarBusy] = useState(false);
 
-  const existingSrc = initial?.hasAvatar
-    ? `/api/personnel/avatar/${initial.id}${initial.avatarUpdatedAt ? `?v=${Date.parse(initial.avatarUpdatedAt) || 0}` : ""}`
-    : null;
+  // Sunuculu sürümde API adresi, statik sürümde tarayıcı veritabanından blob adresi.
+  const existingSrc = useAvatarSrc(initial ?? { id: "new" });
   const previewSrc = avatar === undefined ? existingSrc : avatar;
 
   async function pickAvatar(file: File | undefined) {

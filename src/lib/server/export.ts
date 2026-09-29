@@ -362,8 +362,10 @@ export function xlsxResponse(sheets: { name: string; rows: (string | number)[][]
     ws["!cols"] = widths;
     XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 30));
   });
-  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-  return new Response(new Uint8Array(buf), {
+  // "array" çıktısı hem Node.js hem tarayıcıda (GitHub Pages sürümü) çalışır;
+  // Buffer bağımlılığı yoktur.
+  const out = XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  return new Response(new Uint8Array(out), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,

@@ -18,6 +18,7 @@ import { Btn, Spinner, Modal, Field, TextInput, Badge, cx } from "@/components/u
 import PrintArea, { openPrintPreview } from "@/components/PrintArea";
 import PrintOptionsModal from "@/components/PrintOptionsModal";
 import { downloadPanelPreview } from "@/lib/download-preview";
+import { downloadFromApi } from "@/lib/download";
 
 type ApprovedLeave = Pick<LeaveRequest, "personnelId" | "startDate" | "endDate" | "leaveType">;
 
@@ -246,6 +247,17 @@ export default function NobetPage({
   }
 
   // ═════ Taslak ═════
+  /**
+   * Nöbet çizelgesini Excel/CSV olarak indirir.
+   * fetch + blob akışı sayesinde hem sunuculu hem de GitHub Pages
+   * (tarayıcı veritabanı) sürümünde aynı şekilde çalışır.
+   */
+  function exportRoster(format: "xlsx" | "csv") {
+    const url = `/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=${format}&group=${staffGroup}`;
+    void downloadFromApi(url, `nobet_cizelgesi.${format}`)
+      .catch(e => setError(e instanceof Error ? e.message : "İndirme başarısız"));
+  }
+
   async function runDraft() {
     if (!columns.length) { setError("Önce nöbet sütunu tanımlayın."); return; }
     const overwrite = schedules.length > 0;
@@ -332,8 +344,8 @@ export default function NobetPage({
         </Btn>
         <Btn small onClick={() => load()} title="Yenile"><RefreshCw className="w-3.5 h-3.5" /></Btn>
         <Btn small variant="primary" onClick={runDraft} disabled={busy}><Wand2 className="w-3.5 h-3.5" /> Taslak Oluştur</Btn>
-        <Btn small variant="success" onClick={() => { window.location.href = `/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=xlsx&group=${staffGroup}`; }}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
-        <Btn small onClick={() => { window.location.href = `/api/export/nobet?dept=${selectedDept}&year=${year}&month=${month}&format=csv&group=${staffGroup}`; }}><FileText className="w-3.5 h-3.5" /> CSV</Btn>
+        <Btn small variant="success" onClick={() => exportRoster("xlsx")}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
+        <Btn small onClick={() => exportRoster("csv")}><FileText className="w-3.5 h-3.5" /> CSV</Btn>
         <Btn small variant="amber" onClick={() => setShowPrintModal(true)}><Printer className="w-3.5 h-3.5" /> Yazdır / PDF</Btn>
         <Btn small onClick={() => downloadPanelPreview()} title="Bu ekranın statik kopyasını index.html olarak indir (paylaşım için)"><MonitorDown className="w-3.5 h-3.5" /> Arayüzü İndir (.html)</Btn>
       </div>
