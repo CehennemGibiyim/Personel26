@@ -18,7 +18,7 @@ if (-not $SkipBuild) {
     if ($LASTEXITCODE -ne 0) { throw 'Bagimlilik kurulumu basarisiz.' }
     npx next typegen
     if ($LASTEXITCODE -ne 0) { throw 'Next.js tip uretimi basarisiz.' }
-    npm exec tsc -- --noEmit --pretty false
+    npx tsc --noEmit --pretty false
     if ($LASTEXITCODE -ne 0) { throw 'TypeScript dogrulamasi basarisiz.' }
     npm run build
     if ($LASTEXITCODE -ne 0) { throw 'Uretim derlemesi basarisiz.' }
