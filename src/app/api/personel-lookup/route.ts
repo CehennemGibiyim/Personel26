@@ -49,8 +49,23 @@ function matchesSurname(person: { name?: string | null; fullName?: string | null
   return false;
 }
 
+/** Ad + soyad eşleşmesi: girilen her sözcük personelin adındaki bir sözcükle birebir eşleşmeli (en az 2 sözcük). */
+function matchesFullName(person: { name?: string | null; fullName?: string | null }, input: string): boolean {
+  const inputTokens = String(input ?? "").trim().split(/\s+/).map(normalizeTr).filter(Boolean);
+  if (inputTokens.length < 2) return false;
+  const source = person.fullName || person.name || "";
+  const personTokens = source.trim().split(/\s+/).map(normalizeTr).filter(Boolean);
+  if (personTokens.length < 2) return false;
+  return inputTokens.every(t => personTokens.includes(t));
+}
+
 /**
- * Şifresiz, salt-okunur personel sorgusu:
+ * Şifresiz, salt-okunur personel sorgusu. Üç yöntem desteklenir:
+ *   • yalnızca TC Kimlik No (11 hane),
+ *   • yalnızca Ad Soyad (en az 2 sözcük; birden fazla kişiyle eşleşirse reddedilir),
+ *   • TC + soyad (eski yöntem, geriye dönük uyumluluk).
+ * Doğrulanan kişinin kendi nöbet, izin ve puantaj verisi döner.
+ * Eski açıklama:
  * 11 haneli TC + soyad doğrulanırsa o kişinin kendi nöbet, izin ve puantaj verisi döner.
  */
 export async function POST(req: Request) {
@@ -58,24 +73,52 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const tc = String(body.tcNo ?? "").replace(/\D/g, "");
     const surname = String(body.surname ?? "").trim();
+    const fullName = String(body.fullName ?? "").trim();
 
-    if (!tc || tc.length !== 11) {
-      return Response.json({ error: "Lütfen 11 haneli TC Kimlik Numaranızı girin." }, { status: 400 });
-    }
-    if (!surname || surname.length < 2) {
-      return Response.json({ error: "Lütfen en az 2 karakterden oluşan soyadınızı girin." }, { status: 400 });
-    }
+    let person: typeof personnel.$inferSelect | undefined;
 
-    const matches = await db.select().from(personnel)
-      .where(and(eq(personnel.tcNo, tc), eq(personnel.isActive, true))).limit(5);
-
-    if (matches.length === 0) {
-      return Response.json({ error: "Girdiğiniz TC Kimlik Numarasına ait aktif personel kaydı bulunamadı." }, { status: 404 });
-    }
-
-    const person = matches.find(p => matchesSurname(p, surname));
-    if (!person) {
-      return Response.json({ error: "Girdiğiniz soyad sistemdeki personel kaydıyla eşleşmedi. Lütfen soyadınızı kontrol edin." }, { status: 400 });
+    if (fullName) {
+      // — Yalnızca ad soyad ile sorgu —
+      if (fullName.split(/\s+/).filter(Boolean).length < 2) {
+        return Response.json({ error: "Lütfen adınızı ve soyadınızı birlikte girin (örn. Ayşe Çelik)." }, { status: 400 });
+      }
+      const actives = await db.select().from(personnel).where(eq(personnel.isActive, true));
+      const found = actives.filter(p => matchesFullName(p, fullName));
+      if (found.length === 0) {
+        return Response.json({ error: "Girdiğiniz ad soyada ait aktif personel kaydı bulunamadı. Yazımı kontrol edin." }, { status: 404 });
+      }
+      if (found.length > 1) {
+        return Response.json({ error: "Bu ad soyad ile birden fazla kayıt var. Lütfen TC Kimlik No ile sorgulayın." }, { status: 409 });
+      }
+      person = found[0];
+    } else if (tc && !surname) {
+      // — Yalnızca TC Kimlik No ile sorgu —
+      if (tc.length !== 11) {
+        return Response.json({ error: "Lütfen 11 haneli TC Kimlik Numaranızı girin." }, { status: 400 });
+      }
+      const matches = await db.select().from(personnel)
+        .where(and(eq(personnel.tcNo, tc), eq(personnel.isActive, true))).limit(2);
+      if (matches.length === 0) {
+        return Response.json({ error: "Girdiğiniz TC Kimlik Numarasına ait aktif personel kaydı bulunamadı." }, { status: 404 });
+      }
+      person = matches[0];
+    } else {
+      // — TC + soyad (eski yöntem) —
+      if (!tc || tc.length !== 11) {
+        return Response.json({ error: "Lütfen 11 haneli TC Kimlik Numaranızı girin." }, { status: 400 });
+      }
+      if (!surname || surname.length < 2) {
+        return Response.json({ error: "Lütfen en az 2 karakterden oluşan soyadınızı girin." }, { status: 400 });
+      }
+      const matches = await db.select().from(personnel)
+        .where(and(eq(personnel.tcNo, tc), eq(personnel.isActive, true))).limit(5);
+      if (matches.length === 0) {
+        return Response.json({ error: "Girdiğiniz TC Kimlik Numarasına ait aktif personel kaydı bulunamadı." }, { status: 404 });
+      }
+      person = matches.find(p => matchesSurname(p, surname));
+      if (!person) {
+        return Response.json({ error: "Girdiğiniz soyad sistemdeki personel kaydıyla eşleşmedi. Lütfen soyadınızı kontrol edin." }, { status: 400 });
+      }
     }
 
     const nowDt = new Date();

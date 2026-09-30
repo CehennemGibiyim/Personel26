@@ -224,6 +224,18 @@ const { res: lookupRes, data: lookup } = await json("/api/personel-lookup", post
 check("POST /api/personel-lookup (personel sorgu)", lookupRes.status === 200, `durum ${lookupRes.status} ${JSON.stringify(lookup).slice(0, 120)}`);
 check("Sorgu sonucu nöbet/izin verisi içeriyor", Array.isArray(lookup.schedules) || Array.isArray(lookup.entries) || Boolean(lookup.person), JSON.stringify(Object.keys(lookup)).slice(0, 140));
 
+// Yalnızca TC ile ve yalnızca ad soyad ile sorgu
+const { res: tcOnlyRes, data: tcOnly } = await json("/api/personel-lookup", post({ tcNo: "10000000146" }));
+check("Personel sorgu: yalnızca TC", tcOnlyRes.status === 200 && Boolean(tcOnly.person?.name), `durum ${tcOnlyRes.status} ${JSON.stringify(tcOnly).slice(0, 100)}`);
+const { res: nameOnlyRes, data: nameOnly } = await json("/api/personel-lookup", post({ fullName: "ayşe çelik" }));
+check("Personel sorgu: yalnızca ad soyad (harf duyarsız)", nameOnlyRes.status === 200 && nameOnly.person?.id === tcOnly.person?.id, `durum ${nameOnlyRes.status} ${JSON.stringify(nameOnly).slice(0, 100)}`);
+const { res: oneWordRes } = await json("/api/personel-lookup", post({ fullName: "Çelik" }));
+check("Personel sorgu: tek sözcük reddedilir (400)", oneWordRes.status === 400, `durum ${oneWordRes.status}`);
+const { res: noNameRes } = await json("/api/personel-lookup", post({ fullName: "Olmayan Kişi" }));
+check("Personel sorgu: bilinmeyen ad soyad 404", noNameRes.status === 404, `durum ${noNameRes.status}`);
+const { res: badTcRes } = await json("/api/personel-lookup", post({ tcNo: "123" }));
+check("Personel sorgu: eksik TC reddedilir (400)", badTcRes.status === 400, `durum ${badTcRes.status}`);
+
 // Dışa aktarmalar (Excel/CSV/JSON) — tarayıcıda indirme olarak kullanılan uçlar
 const exportTargets = [
   ["/api/export/puantaj?dept=" + deptId + "&year=" + year + "&month=" + month + "&format=xlsx&group=SAGLIK", "application/vnd.openxmlformats-officedocument", "Puantaj Excel"],

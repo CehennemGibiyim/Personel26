@@ -34,8 +34,9 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
 };
 
 export default function PersonelSelfService() {
+  const [mode, setMode] = useState<"tc" | "name">("tc");
   const [tc, setTc] = useState("");
-  const [surname, setSurname] = useState("");
+  const [fullName, setFullName] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<LookupResult | null>(null);
@@ -48,15 +49,16 @@ export default function PersonelSelfService() {
     setMonth(now.getMonth());
   }, []);
 
-  async function lookup(targetYear?: number, targetMonth?: number, customTc?: string, customSurname?: string) {
-    const queryTc = customTc ?? tc;
-    const querySurname = customSurname ?? surname;
-    if (!queryTc || queryTc.length !== 11) {
-      setErr("Lütfen 11 haneli TC Kimlik Numaranızı girin.");
-      return;
-    }
-    if (!querySurname || querySurname.trim().length < 2) {
-      setErr("Lütfen soyadınızı girin.");
+  async function lookup(targetYear?: number, targetMonth?: number, override?: { mode: "tc" | "name"; value: string }) {
+    const qMode = override?.mode ?? mode;
+    const qValue = (override?.value ?? (qMode === "tc" ? tc : fullName)).trim();
+    if (qMode === "tc") {
+      if (qValue.length !== 11) {
+        setErr("Lütfen 11 haneli TC Kimlik Numaranızı girin.");
+        return;
+      }
+    } else if (qValue.split(/\s+/).filter(Boolean).length < 2) {
+      setErr("Lütfen adınızı ve soyadınızı birlikte girin.");
       return;
     }
     setBusy(true);
@@ -66,8 +68,7 @@ export default function PersonelSelfService() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tcNo: queryTc,
-          surname: querySurname,
+          ...(qMode === "tc" ? { tcNo: qValue } : { fullName: qValue }),
           year: targetYear ?? year,
           month: targetMonth ?? month,
         }),
@@ -84,11 +85,13 @@ export default function PersonelSelfService() {
     }
   }
 
-  function fillDemoAndLookup(demoTc: string, demoSurname: string) {
+  function fillDemoAndLookup(demoTc: string) {
+    setMode("tc");
     setTc(demoTc);
-    setSurname(demoSurname);
-    lookup(year, month, demoTc, demoSurname);
+    lookup(year, month, { mode: "tc", value: demoTc });
   }
+
+  const canSubmit = mode === "tc" ? tc.length === 11 : fullName.trim().split(/\s+/).filter(Boolean).length >= 2;
 
   if (!result) {
     return (
@@ -100,33 +103,52 @@ export default function PersonelSelfService() {
             </div>
             <h1 className="text-sm font-black text-white" style={{ fontFamily: "var(--font-grotesk)" }}>Personel Bilgi Ekranı</h1>
             <p className="text-white/40 text-xs mt-1.5 max-w-xs leading-relaxed">
-              Kendi nöbet listenizi, izin durumunuzu ve puantaj özetinizi görüntülemek için TC Kimlik No ve soyadınızla giriş yapın.
+              Kendi nöbet listenizi, izin durumunuzu ve puantaj özetinizi görüntülemek için TC Kimlik No ile veya Ad Soyad ile sorgulayın.
             </p>
           </div>
 
           <div className="panel p-5 space-y-4">
-            <div>
-              <label className="text-white/50 text-[11px] font-bold uppercase tracking-wider block mb-1.5">TC Kimlik No</label>
-              <input
-                value={tc}
-                inputMode="numeric"
-                autoFocus
-                onChange={e => setTc(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                onKeyDown={e => e.key === "Enter" && lookup()}
-                placeholder="11 haneli TC kimlik numaranız"
-                className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2.5 text-white text-xs outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-500/20 transition placeholder:text-white/25 tracking-widest"
-              />
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[.05] border border-white/10">
+              {([["tc", "TC Kimlik No ile"], ["name", "Ad Soyad ile"]] as const).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => { setMode(m); setErr(""); }}
+                  className={cx(
+                    "py-2 rounded-lg text-xs font-bold transition cursor-pointer",
+                    mode === m ? "bg-emerald-500 text-white shadow" : "text-white/50 hover:text-white",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="text-white/50 text-[11px] font-bold uppercase tracking-wider block mb-1.5">Soyadınız</label>
-              <input
-                value={surname}
-                onChange={e => setSurname(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && lookup()}
-                placeholder="Soyadınız (veya tam adınız)"
-                className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2.5 text-white text-xs outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-500/20 transition placeholder:text-white/25"
-              />
-            </div>
+            {mode === "tc" ? (
+              <div>
+                <label className="text-white/50 text-[11px] font-bold uppercase tracking-wider block mb-1.5">TC Kimlik No</label>
+                <input
+                  value={tc}
+                  inputMode="numeric"
+                  autoFocus
+                  onChange={e => setTc(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                  onKeyDown={e => e.key === "Enter" && lookup()}
+                  placeholder="11 haneli TC kimlik numaranız"
+                  className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2.5 text-white text-xs outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-500/20 transition placeholder:text-white/25 tracking-widest"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="text-white/50 text-[11px] font-bold uppercase tracking-wider block mb-1.5">Ad Soyad</label>
+                <input
+                  value={fullName}
+                  autoFocus
+                  onChange={e => setFullName(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && lookup()}
+                  placeholder="Adınız ve soyadınız (örn. Ayşe Çelik)"
+                  className="w-full bg-white/[.07] border border-white/15 rounded-lg px-3 py-2.5 text-white text-xs outline-none focus:border-emerald-400/70 focus:ring-2 focus:ring-emerald-500/20 transition placeholder:text-white/25"
+                />
+              </div>
+            )}
             {err && (
               <div className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs rounded-lg px-3 py-2.5 anim-slide">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -135,7 +157,7 @@ export default function PersonelSelfService() {
             )}
             <button
               onClick={() => lookup()}
-              disabled={tc.length !== 11 || surname.trim().length < 2 || busy}
+              disabled={!canSubmit || busy}
               className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-bold text-xs transition active:scale-[.98] disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-950/50"
             >
               <KeyRound className="w-4 h-4" /> {busy ? "Doğrulanıyor…" : "Bilgilerimi Getir"}
@@ -149,7 +171,7 @@ export default function PersonelSelfService() {
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => fillDemoAndLookup("10000000146", "ÇELİK")}
+                  onClick={() => fillDemoAndLookup("10000000146")}
                   className="px-2.5 py-1.5 rounded-lg bg-white/[.05] border border-white/10 hover:border-emerald-400/40 text-left text-xs text-white/80 hover:text-white transition cursor-pointer"
                 >
                   <span className="block font-bold text-emerald-300">AYŞE ÇELİK</span>
@@ -157,7 +179,7 @@ export default function PersonelSelfService() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => fillDemoAndLookup("10000000236", "ŞAHİN")}
+                  onClick={() => fillDemoAndLookup("10000000236")}
                   className="px-2.5 py-1.5 rounded-lg bg-white/[.05] border border-white/10 hover:border-emerald-400/40 text-left text-xs text-white/80 hover:text-white transition cursor-pointer"
                 >
                   <span className="block font-bold text-sky-300">MEHMET ŞAHİN</span>
