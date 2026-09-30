@@ -8,7 +8,7 @@ New-Item -ItemType Directory -Force -Path $Cache | Out-Null
 if (-not $SkipBuild) {
   Push-Location $Root
   try {
-    if (Test-Path 'package-lock.json') { npm ci } else { npm install }
+    if (Test-Path 'package-lock.json') { npm ci --allow-remote=root } else { npm install --allow-remote=root }
     if ($LASTEXITCODE -ne 0) { throw 'Bagimlilik kurulumu basarisiz.' }
     npx next typegen
     if ($LASTEXITCODE -ne 0) { throw 'Next.js tip uretimi basarisiz.' }
