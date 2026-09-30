@@ -59,7 +59,7 @@ export default function BackupPage() {
     if (!confirm(`"${b.filename}" geri yüklenecek. Mevcut tüm veriler bu yedekle değiştirilecek (önce otomatik güvenlik yedeği alınır). Devam?`)) return;
     setBusy(true); setMsg(""); setErr("");
     try {
-      const res = await fetch(`/api/backup/${b.id}`, { method: "POST" });
+      const res = await fetch(`/api/backup/${b.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "GERİ YÜKLE" }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setMsg("Geri yükleme tamamlandı. Sayfa yenileniyor…");

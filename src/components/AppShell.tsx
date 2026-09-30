@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Pencil, Trash2, Check,
+  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole,
 } from "lucide-react";
 import type { Department, Personnel, Holiday, ShiftTemplate, StaffGroup } from "@/lib/shared";
 import { STAFF_GROUP_META, STAFF_GROUP_ORDER, staffGroupOf, personnelInDepartment } from "@/lib/shared";
@@ -18,10 +18,12 @@ import AnalysisPage from "@/components/AnalysisPage";
 import WarningsPage from "@/components/WarningsPage";
 import NotesPage from "@/components/NotesPage";
 import BackupPage from "@/components/BackupPage";
+import SettingsPage from "@/components/SettingsPage";
+import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/settings";
 
 type PageKey =
   | "puantaj" | "nobet" | "sablon" | "izin" | "degisim" | "personel"
-  | "analiz" | "uyarilar" | "duyuru" | "yedek";
+  | "analiz" | "uyarilar" | "duyuru" | "yedek" | "ayarlar";
 
 const NAV: { key: PageKey; label: string; icon: React.ReactNode; desc: string }[] = [
   { key: "puantaj", label: "Puantaj", icon: <ClipboardList className="w-[17px] h-[17px]" />, desc: "Aylık çalışma cetveli" },
@@ -34,6 +36,7 @@ const NAV: { key: PageKey; label: string; icon: React.ReactNode; desc: string }[
   { key: "uyarilar", label: "Mevzuat Uyarıları", icon: <ShieldAlert className="w-[17px] h-[17px]" />, desc: "Dinlenme ve limitler" },
   { key: "duyuru", label: "Duyurular", icon: <Megaphone className="w-[17px] h-[17px]" />, desc: "Servis bildirimleri" },
   { key: "yedek", label: "Yedekleme", icon: <DatabaseBackup className="w-[17px] h-[17px]" />, desc: "Veri güvenliği" },
+  { key: "ayarlar", label: "Ayarlar", icon: <Settings2 className="w-[17px] h-[17px]" />, desc: "Kurum, görünüm ve sistem" },
 ];
 
 const MONTH_PAGES: PageKey[] = ["puantaj", "nobet", "sablon", "izin", "degisim", "analiz", "uyarilar"];
@@ -60,13 +63,30 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   // uyuşmazlığına ve tüm tıklamaların ölmesine (donuk sayfa) yol açar.
   const [year, setYear] = useState(() => initialData?.today?.year ?? new Date().getFullYear());
   const [month, setMonth] = useState(() => initialData?.today?.month ?? new Date().getMonth());
-  const [page, setPage] = useState<PageKey>("puantaj");
+  const [page, setPage] = useState<PageKey>("ayarlar");
   const [staffGroup, setStaffGroup] = useState<StaffGroup>("SAGLIK");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState<false | "add" | "edit">(false);
   const [deptOpen, setDeptOpen] = useState(false);
   const deptRef = useRef<HTMLDivElement | null>(null);
   const [bootError, setBootError] = useState("");
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  function navigate(key: PageKey) {
+    if (page === "ayarlar" && key !== "ayarlar" && settingsDirty && !window.confirm("Kaydedilmemiş ayarlarınız var. Kaydetmeden bu sayfadan ayrılmak istiyor musunuz?")) return;
+    setPage(key); setSidebarOpen(false);
+  }
+  useEffect(() => {
+    const listener = (event: Event) => setSettingsDirty(Boolean((event as CustomEvent).detail));
+    window.addEventListener("p26-dirty", listener);
+    return () => window.removeEventListener("p26-dirty", listener);
+  }, []);
+  const [preferences, setPreferences] = useState<AppSettings>(DEFAULT_SETTINGS);
+  useEffect(() => {
+    try { const stored = localStorage.getItem("p26-settings"); if (stored) setPreferences({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) }); } catch {}
+    const handler = (event: Event) => setPreferences((event as CustomEvent<AppSettings>).detail);
+    window.addEventListener("p26-settings", handler);
+    return () => window.removeEventListener("p26-settings", handler);
+  }, []);
 
   const loadBootstrap = useCallback(async () => {
     try {
@@ -134,10 +154,10 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const navItem = NAV.find(n => n.key === page)!;
 
   return (
-    <div className="screen-root min-h-screen lg:flex">
+    <div className={cx("screen-root min-h-screen lg:flex", page === "ayarlar" && "settings-screen")}>
       {/* Mobil üst çubuk */}
       <div className="lg:hidden flex items-center gap-2 px-3 py-2.5 border-b border-white/10 bg-[#0a1020]/95 backdrop-blur sticky top-0 z-40">
-        <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition"><Menu className="w-4 h-4" /></button>
+        <button aria-label="Menüyü aç" onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition"><Menu className="w-4 h-4" /></button>
         <div className="text-white font-bold text-xs">{navItem.label}</div>
         <div className="flex-1" />
         {MONTH_PAGES.includes(page) && (
@@ -153,10 +173,10 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         <div className="px-4 pt-5 pb-4 border-b border-white/[.08]">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-500 to-violet-600 flex items-center justify-center shadow-lg shadow-sky-950/50">
-              <HeartPulse className="w-5 h-5 text-white" />
+              {preferences.logo ? <img src={preferences.logo} alt="Kurum logosu" className="w-full h-full object-cover rounded-xl" /> : <HeartPulse className="w-5 h-5 text-white" />}
             </div>
             <div>
-              <div className="text-white font-black text-[15px] leading-tight" style={{ fontFamily: "var(--font-grotesk)" }}>Personel26</div>
+              <div className="text-white font-black text-[15px] leading-tight" style={{ fontFamily: "var(--font-grotesk)" }}>{preferences.shortName}</div>
               <div className="text-white/35 text-[10px] font-medium tracking-wide">Puantaj & Nöbet Yönetimi</div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden ml-auto p-1.5 text-white/40 hover:text-white"><X className="w-4 h-4" /></button>
@@ -164,11 +184,15 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
+          <div className="shell-nav-label">ÇALIŞMA ALANI</div>
           {NAV.map(n => (
+            <div key={n.key}>
+            {n.key === "analiz" && <div className="shell-nav-label">YÖNETİM</div>}
             <button
               key={n.key}
+              aria-current={page === n.key ? "page" : undefined}
               type="button"
-              onClick={() => { setPage(n.key); setSidebarOpen(false); }}
+              onClick={() => navigate(n.key)}
               className={cx(
                 "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition cursor-pointer select-none group",
                 page === n.key
@@ -182,10 +206,11 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
                 <span className="block text-[10px] opacity-60 truncate">{n.desc}</span>
               </span>
             </button>
+            </div>
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-white/[.08] space-y-2">
+        {page !== "ayarlar" && <div className="px-3 py-3 border-t border-white/[.08] space-y-2">
           <Link
             href="/personel" target="_blank"
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/15 transition text-xs font-bold"
@@ -200,13 +225,18 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
           <p className="text-white/20 text-[9px] px-1 leading-relaxed">
             İzinli personelin nöbet listesinden çıkarılması, dinlenme süreleri ve mükerrer vardiya koruması aktiftir.
           </p>
-        </div>
+        </div>}
+        {page === "ayarlar" && <div className="settings-sidebar-footer">
+          <div className="sidebar-workspace"><Database size={16} /><div><b>Kurum çalışma alanı</b><small>{departments.length > 0 ? "PostgreSQL bağlantısı etkin" : "Bağlantı hazırlanıyor"}</small></div></div>
+          <div className="sidebar-user-card"><span className="user-avatar">YK</span><div><b>Yönetici</b><small>Kurum yönetimi</small></div><details className="sidebar-tools"><summary aria-label="Ek araçlar"><Ellipsis size={17} /></summary><div><Link href="/personel" target="_blank"><Fingerprint size={14} /> Personel sorgu ekranı</Link><PreviewDownloadButton /></div></details></div>
+          <div className="sidebar-version"><LockKeyhole size={9} /> Kurum içi kullanım<span>v1.1.0</span></div>
+        </div>}
       </aside>
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* İçerik */}
       <main className="flex-1 min-w-0 relative z-0">
-        <header className="hidden lg:block sticky top-0 z-30 bg-[#070b14]/90 backdrop-blur-md border-b border-white/[.07]">
+        {page !== "ayarlar" && <header className="hidden lg:block sticky top-0 z-30 bg-[#070b14]/90 backdrop-blur-md border-b border-white/[.07]">
           {/* 1. satır — Departmanlar: en üstte, yan yana, tek satır (taşarsa yatay kaydırma) */}
           <div className="flex items-center gap-2 px-6 pt-3 pb-2.5 border-b border-white/[.05]">
             <span className="flex items-center gap-1.5 text-white/35 text-[10px] font-bold uppercase tracking-widest shrink-0">
@@ -276,10 +306,10 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
               )}
             </div>
           </div>
-        </header>
+        </header>}
 
         {/* Mobil departman menüsü */}
-        <div className="lg:hidden px-3 py-2 flex items-center gap-1.5 border-b border-white/[.07]">
+        <div className={cx("lg:hidden px-3 py-2 flex items-center gap-1.5 border-b border-white/[.07]", page === "ayarlar" && "!hidden")}>
           <div className="relative flex-1" ref={deptRef}>
             <button
               type="button"
@@ -329,7 +359,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         {/* Mobil grup seçimi */}
         {showGroup && <div className="lg:hidden px-3 pt-2">{groupSwitch(true)}</div>}
 
-        <div className="px-3 sm:px-5 lg:px-6 py-4 max-w-[1600px]">
+        <div className={page === "ayarlar" ? "" : "px-3 sm:px-5 lg:px-6 py-4 max-w-[1600px]"}>
           {selectedDept && (
             <>
               {page === "puantaj" && (
@@ -358,6 +388,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
             </>
           )}
           {page === "yedek" && <BackupPage />}
+          {page === "ayarlar" && <SettingsPage departments={departments} onPersonnelChanged={loadBootstrap} onOpenPersonnel={() => navigate("personel")} />}
         </div>
       </main>
 

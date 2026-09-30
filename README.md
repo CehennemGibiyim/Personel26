@@ -98,3 +98,13 @@ node scripts/browser-test-clockskew.mjs  # saat farkı senaryosunda hidrasyon g�
 ## Lisans
 
 Kurum içi kullanım için geliştirilmiştir.
+
+## Ayarlar ve toplu aktarım — 1.1.0
+
+Sol menüde **Ayarlar**: kurum bilgileri/logo, korunmuş ana tema + 20 alternatif, Excel/CSV aktarımı, yedekleme ve veritabanı işlemleri, bildirimler ve sistem durumu. Personel Yönetimi içinden de Excel/CSV aktarımı açılabilir.
+
+Ayrıntılar, test komutları ve dağıtım sınırları: **[GELISTIRME-NOTLARI.md](GELISTIRME-NOTLARI.md)**. Windows kurulum/güncelleme/SQL geri yükleme ve Actions testleri: **[windows/README-WINDOWS.md](windows/README-WINDOWS.md)**.
+
+GitHub Pages komutlarını doğrudan `node scripts/pages-build.mjs` ve `node scripts/pages-smoke-test.mjs` ile çalıştırabilirsiniz. Şema değişiminde tarayıcı veritabanının kullanıcı verileri artık otomatik sıfırlanmaz.
+
+Windows testleri Linux geliştirme ortamında çalıştırılmadı; depo GitHub’a gönderildikten sonra gerçek Actions sonuçları ayrıca incelenmelidir. Panel içindeki Windows durumu bu nedenle bekliyor olarak görünür.

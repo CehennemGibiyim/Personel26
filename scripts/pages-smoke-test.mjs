@@ -253,6 +253,30 @@ if (backup.id) {
   check("GET /api/backup/[id] (JSON yedek indirme)", res.status === 200 && text.length > 1000, `durum ${res.status}, ${text.length} bayt`);
 }
 
+// Yeni ayar, aktarım ve geri yükleme uçları PGlite'ta da aynı sözleşmeyle çalışır.
+const p26Json = (data) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+const { res: settingsRes, data: p26Settings } = await json("/api/settings");
+check("PGlite ayarlar ve şema sürümü", settingsRes.ok && p26Settings.status?.schemaVersion === "2026.01");
+const { res: saveSettingsRes } = await json("/api/settings", { ...p26Json({ ...p26Settings.settings, institution: "PGLITE TEST KURUMU" }), method: "PUT" });
+check("PGlite ayar kaydetme", saveSettingsRes.ok);
+const { data: p26Boot } = await json("/api/bootstrap");
+const p26Input = { rows: [["PGLİTE AKTARIM TESTİ", "55555555550"]], mapping: { name: 0, tcNo: 1 }, defaults: { personnelType: "HEMSIRE", staffGroup: "SAGLIK", departmentIds: [p26Boot.departments[0].id] }, fileName: "pglite.csv", mode: "preview" };
+const { res: importPreviewRes, data: p26Preview } = await json("/api/personnel/import", p26Json(p26Input));
+check("PGlite aktarım önizleme", importPreviewRes.ok && p26Preview.summary?.valid === 1);
+const { res: commitRes, data: p26Commit } = await json("/api/personnel/import", p26Json({ ...p26Input, mode: "commit", confirmed: true }));
+check("PGlite transaction ile personel aktarımı", commitRes.ok && p26Commit.imported === 1, JSON.stringify(p26Commit).slice(0, 160));
+const { res: schemaUpdateRes } = await json("/api/database", p26Json({ action: "update", confirm: "GÜNCELLE" }));
+check("PGlite veri koruyan şema güncellemesi", schemaUpdateRes.ok);
+const p26SqlResponse = await api("/api/database?format=sql");
+check("PGlite SQL yedeği", p26SqlResponse.ok && (await p26SqlResponse.text()).includes("COMMIT;"));
+if (backup.id) {
+  const { data: p26RestoreData } = await json(`/api/backup/${backup.id}`);
+  const { res: filePreviewRes } = await json("/api/database", p26Json({ action: "preview", data: p26RestoreData }));
+  check("PGlite dosyadan yedek doğrulama", filePreviewRes.ok);
+  const { res: restoreRes } = await json("/api/database", p26Json({ action: "restore", data: p26RestoreData, confirm: "GERİ YÜKLE" }));
+  check("PGlite transaction ile geri yükleme", restoreRes.ok);
+}
+
 // Bilinmeyen uç → anlaşılır 404
 const { res: unknownRes, data: unknown } = await json("/api/boyle-bir-uc-yok");
 check("Bilinmeyen uç 404 döndü", unknownRes.status === 404 && Boolean(unknown.error), JSON.stringify(unknown).slice(0, 120));

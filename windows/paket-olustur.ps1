@@ -1,114 +1,57 @@
-# ============================================================
-#  Personel26 — Windows Taşınabilir Paket Oluşturucu
-#  Windows makinede proje kök klasöründen çalıştırın:
-#    powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
-#
-#  Yaptıkları:
-#   1) Uygulamayı derler (next build, standalone çıktı)
-#   2) Taşınabilir Node.js indirir
-#   3) Taşınabilir PostgreSQL indirir
-#   4) Hepsini Personel26-Portable\ klasöründe birleştirir
-#   5) İsteğe bağlı: ZIP arşivi üretir
-#  Çıkan klasörü herhangi bir Windows PC'ye kopyalayıp
-#  Personel26-Baslat.bat ile çalıştırabilirsiniz. Kurulum gerekmez.
-# ============================================================
-$ErrorActionPreference = "Stop"
-
-$NodeVersion = "22.14.0"
-$PgVersion   = "16.4-1"
-$Root  = Split-Path -Parent $PSScriptRoot   # proje kökü
-$Out   = Join-Path $Root "Personel26-Portable"
-$Cache = Join-Path $Root ".paket-cache"
-
-Write-Host "==> Personel26 taşınabilir paket oluşturucu" -ForegroundColor Cyan
-Write-Host "    Proje: $Root"
-
-# ---- 0) Ön kontrol ----
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  throw "Bu makinede Node.js kurulu olmalı (paketi DERLEMEK için). https://nodejs.org"
-}
+[CmdletBinding()]
+param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1')
+$ErrorActionPreference = 'Stop'
+$Root = Split-Path -Parent $PSScriptRoot
+$Out = Join-Path $Root 'Personel26-Portable'
+$Cache = Join-Path $Root '.paket-cache'
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
-
-# ---- 1) Uygulamayı derle ----
-Write-Host "==> [1/5] Uygulama derleniyor (npm ci + next build)..." -ForegroundColor Cyan
-Push-Location $Root
-if (Test-Path "package-lock.json") { npm ci } else { npm install }
-# Derleme sırasında API route'ları veritabanı modülünü import eder.
-# Derleme DB'ye bağlanmamalı: paket için yalnızca geçici build URL'i ver.
-# Portable kullanıcı veritabanı, uygulama BAŞLADIĞINDA kendi pg klasöründe kurulur.
-$PreviousDatabaseUrl = $env:DATABASE_URL
-$env:DATABASE_URL = "postgresql://build:build@127.0.0.1:1/personel26_build_only"
-try {
-  npm run build
-  if ($LASTEXITCODE -ne 0) { throw "Derleme başarısız." }
-} finally {
-  if ($null -eq $PreviousDatabaseUrl) {
-    Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
-  } else {
-    $env:DATABASE_URL = $PreviousDatabaseUrl
-  }
+if (-not $SkipBuild) {
+  Push-Location $Root
+  try {
+    if (Test-Path 'package-lock.json') { npm ci } else { npm install }
+    if ($LASTEXITCODE -ne 0) { throw 'Bagimlilik kurulumu basarisiz.' }
+    npx next typegen
+    if ($LASTEXITCODE -ne 0) { throw 'Next.js tip uretimi basarisiz.' }
+    npm exec tsc -- --noEmit --pretty false
+    if ($LASTEXITCODE -ne 0) { throw 'TypeScript dogrulamasi basarisiz.' }
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw 'Uretim derlemesi basarisiz.' }
+  } finally { Pop-Location }
 }
-if (-not (Test-Path ".next\standalone\server.js")) {
-  throw "standalone çıktı bulunamadı. next.config.ts içinde output:'standalone' olmalı."
-}
-Pop-Location
-
-# ---- 2) Taşınabilir Node.js ----
-$NodeZip = Join-Path $Cache "node-v$NodeVersion-win-x64.zip"
-if (-not (Test-Path $NodeZip)) {
-  Write-Host "==> [2/5] Node.js v$NodeVersion indiriliyor..." -ForegroundColor Cyan
-  Invoke-WebRequest "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-x64.zip" -OutFile $NodeZip
-} else { Write-Host "==> [2/5] Node.js önbellekten kullanılıyor." -ForegroundColor Cyan }
-
-# ---- 3) Taşınabilir PostgreSQL (EDB binaries) ----
+if (-not (Test-Path (Join-Path $Root '.next\standalone\server.js'))) { throw 'Next.js standalone sunucu ciktisi bulunamadi.' }
+$NodeFile = "node-v$NodeVersion-win-x64.zip"
+$NodeZip = Join-Path $Cache $NodeFile
+if (-not (Test-Path $NodeZip)) { Invoke-WebRequest "https://nodejs.org/dist/v$NodeVersion/$NodeFile" -OutFile $NodeZip }
+# Resmi Node.js SHA-256 kontrolu.
+$Checksums = (Invoke-WebRequest "https://nodejs.org/dist/v$NodeVersion/SHASUMS256.txt").Content
+$Line = ($Checksums -split "`n" | Where-Object { $_.Trim().EndsWith($NodeFile) } | Select-Object -First 1)
+if (-not $Line) { throw 'Node.js checksum kaydi bulunamadi.' }
+$Expected = ($Line.Trim() -split '\s+')[0]
+if ((Get-FileHash $NodeZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Expected.ToLowerInvariant()) { throw 'Node.js SHA-256 dogrulamasi basarisiz.' }
 $PgZip = Join-Path $Cache "postgresql-$PgVersion-windows-x64-binaries.zip"
-if (-not (Test-Path $PgZip)) {
-  Write-Host "==> [3/5] PostgreSQL $PgVersion indiriliyor (~300 MB)..." -ForegroundColor Cyan
-  Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip" -OutFile $PgZip
-} else { Write-Host "==> [3/5] PostgreSQL önbellekten kullanılıyor." -ForegroundColor Cyan }
-
-# ---- 4) Paket klasörünü birleştir ----
-Write-Host "==> [4/5] Paket birleştiriliyor: $Out" -ForegroundColor Cyan
+if (-not (Test-Path $PgZip)) { Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip" -OutFile $PgZip }
 if (Test-Path $Out) { Remove-Item $Out -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "$Out\app", "$Out\node" | Out-Null
-
-# 4a) Uygulama (standalone + static + public)
 Copy-Item "$Root\.next\standalone\*" "$Out\app\" -Recurse -Force
 New-Item -ItemType Directory -Force -Path "$Out\app\.next\static" | Out-Null
 Copy-Item "$Root\.next\static\*" "$Out\app\.next\static\" -Recurse -Force
 if (Test-Path "$Root\public") { Copy-Item "$Root\public" "$Out\app\public" -Recurse -Force }
-
-# 4b) Node (yalnızca node.exe yeterli)
-$NodeTmp = Join-Path $Cache "node-extract"
-if (Test-Path $NodeTmp) { Remove-Item $NodeTmp -Recurse -Force }
+# Gelistirme ortamina ait baglanti bilgileri pakete ALINMAZ.
+Get-ChildItem "$Out\app" -Filter '.env*' -Force -ErrorAction SilentlyContinue | Remove-Item -Force
+$NodeTmp = Join-Path $Cache 'node-extract'
+$PgTmp = Join-Path $Cache 'pg-extract'
+foreach ($dir in @($NodeTmp,$PgTmp)) { if (Test-Path $dir) { Remove-Item $dir -Recurse -Force } }
 Expand-Archive $NodeZip -DestinationPath $NodeTmp
 Copy-Item (Get-ChildItem "$NodeTmp\*\node.exe").FullName "$Out\node\node.exe"
-
-# 4c) PostgreSQL (bin + lib + share yeterli)
-$PgTmp = Join-Path $Cache "pg-extract"
-if (Test-Path $PgTmp) { Remove-Item $PgTmp -Recurse -Force }
 Expand-Archive $PgZip -DestinationPath $PgTmp
 New-Item -ItemType Directory -Force -Path "$Out\pgsql" | Out-Null
-foreach ($d in "bin","lib","share") {
-  Copy-Item "$PgTmp\pgsql\$d" "$Out\pgsql\$d" -Recurse -Force
+foreach ($dir in @('bin','lib','share')) { Copy-Item "$PgTmp\pgsql\$dir" "$Out\pgsql\$dir" -Recurse -Force }
+foreach ($file in @('Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','Personel26-Yonet.ps1','schema.sql','schema-update.sql')) { Copy-Item (Join-Path $PSScriptRoot $file) $Out -Force }
+Copy-Item (Join-Path $PSScriptRoot 'README-WINDOWS.md') (Join-Path $Out 'BENIOKU.md')
+@{ application='1.1.0'; schema='2026.01'; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
+if (-not $NoZip) {
+  $Zip = Join-Path $Root 'Personel26-Portable.zip'
+  if (Test-Path $Zip) { Remove-Item $Zip -Force }
+  Compress-Archive -Path "$Out\*" -DestinationPath $Zip
 }
-
-# 4d) Başlatıcılar + şema
-Copy-Item "$Root\windows\Personel26-Baslat.bat" $Out
-Copy-Item "$Root\windows\Personel26-Durdur.bat" $Out
-Copy-Item "$Root\windows\schema.sql" $Out
-Copy-Item "$Root\windows\README-WINDOWS.md" "$Out\BENIOKU.md" -ErrorAction SilentlyContinue
-
-# ---- 5) ZIP ----
-Write-Host "==> [5/5] ZIP arşivi oluşturuluyor..." -ForegroundColor Cyan
-$Zip = Join-Path $Root "Personel26-Portable.zip"
-if (Test-Path $Zip) { Remove-Item $Zip -Force }
-Compress-Archive -Path "$Out\*" -DestinationPath $Zip
-
-Write-Host ""
-Write-Host "✅ TAMAMLANDI!" -ForegroundColor Green
-Write-Host "   Klasör : $Out"
-Write-Host "   Arşiv  : $Zip"
-Write-Host ""
-Write-Host "Kullanım: Klasörü/ZIP'i hedef bilgisayara kopyalayın,"
-Write-Host "Personel26-Baslat.bat dosyasına çift tıklayın. Hepsi bu."
+Write-Host "Paket hazir: $Out" -ForegroundColor Green

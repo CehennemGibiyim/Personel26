@@ -1,85 +1,55 @@
-# Personel26 — Windows Kurulum Rehberi
+# Personel26 — Windows 1.1.0
 
-Bu klasör, sistemi Windows'ta **taşınabilir (portable)** ve **kurulumlu (installer)**
-olarak paketlemek için gereken her şeyi içerir.
+## Son kullanıcı
 
----
+Node.js ve PostgreSQL ayrıca kurulmaz: paket kendi Windows x64 çalıştırıcılarını içerir. Kurulum kullanıcı klasörüne yapılır ve yönetici yetkisi gerektirmez.
 
-## Seçenek 1: Taşınabilir Paket (önerilen, en kolay)
+- **Personel26-Baslat.bat**: veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu başlatır ve tarayıcıyı açar.
+- **Personel26-Durdur.bat**: sadece paketin PID dosyasındaki, yolu doğrulanmış Node sürecini ve kendi PostgreSQL kümesini kapatır. Diğer Node uygulamalarını kapatmaz.
+- **Personel26-Yedekle.bat**: `data/backups` içine yerel PostgreSQL SQL yedeği oluşturur.
+- Panelde **Ayarlar → Yedekleme & Veritabanı**: JSON yedeği, SQL dışa aktarma, doğrulanmış dosyadan geri yükleme ve şema güncelleme.
 
-Tek klasör — kopyala, çift tıkla, çalışır. Kurulum, yönetici izni, internet gerekmez.
+Adres: `http://127.0.0.1:3210`. PostgreSQL yalnızca `127.0.0.1:5433` üzerinde dinler. İlk kurulumda rastgele veritabanı parolası üretilir ve mevcut kullanıcıya özel izinlerle `data/connection.json` içinde saklanır. Bu dosyayı paylaşmayın.
 
-### Paketi üretme (bir kez, geliştirici makinesinde)
+## SQL şema ile veri yedeği farklıdır
 
-1. Windows'ta [Node.js LTS](https://nodejs.org) kurun (yalnızca paketlemek için).
-2. **PostgreSQL kurmanız veya `DATABASE_URL` ayarlamanız gerekmez.** Derleme için script geçici bir yerel adres kullanır; son kullanıcı paketinde PostgreSQL de taşınabilir olarak eklenir.
-3. Projeyi indirin ve PowerShell'i proje klasöründe açın:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
-   ```
-3. Script otomatik olarak:
-   - Uygulamayı derler (standalone çıktı)
-   - Taşınabilir Node.js (~30 MB) ve PostgreSQL (~300 MB) indirir
-   - `Personel26-Portable\` klasörünü ve `Personel26-Portable.zip` arşivini üretir
+- `schema.sql`: boş veritabanının ilk kurulumu; tabloları oluşturur, kullanıcı verisi içermez. Boş veritabanında bir kez uygulanır.
+- `schema-update.sql`: mevcut verileri koruyarak yeni sütunları ve tabloları ekler. Tekrar çalıştırılabilir. Her başlatmada uygulanır.
+- Panelden indirilen veri SQL'i: uyumlu şema üzerine uygulama verilerini geri koyar. Önce yedek alır, uygulamayı kapatır ve yalnızca güvenilir dosyaları kullanırsınız.
+- `Personel26-Yedekle.bat` ile alınan SQL: `pg_dump --clean --if-exists` çıktısı; şema ve verileri içerir. Yerel PostgreSQL aracına geri verilebilir.
 
-### Kullanıcı bilgisayarında çalıştırma
+SQL geri yükleme (uygulama klasöründe PowerShell):
 
-1. `Personel26-Portable` klasörünü (veya ZIP'i açıp) istediğiniz yere kopyalayın —
-   USB bellek, D: sürücüsü, masaüstü... fark etmez.
-2. **`Personel26-Baslat.bat`** dosyasına çift tıklayın.
-   - İlk açılışta veritabanı otomatik kurulur (~15 sn) ve örnek veriler yüklenir.
-   - Tarayıcı otomatik açılır: `http://127.0.0.1:3210`
-3. Kapatmak için **`Personel26-Durdur.bat`** çalıştırın.
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\Personel26-Yonet.ps1 -Action Restore -BackupFile "D:\Yedek\personel26.sql"`
 
-> Tüm verileriniz `data\` klasöründe saklanır. **Yedek almak = bu klasörü kopyalamak.**
-> Uygulama içindeki Yedekleme sayfası da ayrıca çalışır.
+Önce otomatik güvenlik yedeği alınır. SQL tek transaction ile çalıştırılır; başarısız olursa mevcut veriler korunur. Geri yükleme sonrasında şema güncellemesi tekrar uygulanır. Panel üzerinden SQL çalıştırılmaz: panel JSON dosyasını doğrular ve önizler.
 
-### Klasör yapısı
-```
-Personel26-Portable\
-├── Personel26-Baslat.bat   ← çift tıkla, sistem açılır
-├── Personel26-Durdur.bat   ← güvenli kapatma
-├── app\                    ← uygulama (standalone Next.js)
-├── node\node.exe           ← taşınabilir Node çalıştırıcı
-├── pgsql\                  ← taşınabilir PostgreSQL
-├── data\                   ← VERİLERİNİZ (ilk açılışta oluşur)
-└── schema.sql              ← veritabanı şeması
-```
+## Güncelleme
 
----
+Önce tüm dosyalarınızı ve `data` klasörünü harici diske yedekleyin. Yeni kurulum dosyası mevcut aynı kullanıcı klasörüne kurulduğunda `data` klasörü korunur. Uygulama yeniden başlatıldığında `schema-update.sql` uygulanır.
 
-## Seçenek 2: Kurulum Paketi (Personel26-Kurulum.exe)
+Alternatif olarak yeni portable klasörünü kullanın:
 
-Klasik "İleri → İleri → Bitir" kurulumu; masaüstü/başlat menüsü kısayolları
-ve kaldırma desteğiyle.
+`powershell -NoProfile -ExecutionPolicy Bypass -File .\Personel26-Yonet.ps1 -Action Update -PackagePath "D:\YeniSurum\Personel26-Portable"`
 
-1. Önce Seçenek 1'deki taşınabilir paketi üretin.
-2. [Inno Setup 6](https://jrsoftware.org/isdl.php)'yı kurun (ücretsiz).
-3. `windows\installer.iss` dosyasını Inno Setup Compiler ile açın → **Compile**.
-4. Çıktı: `windows\Personel26-Kurulum.exe` — dağıtabilirsiniz.
+Bu akış SQL güvenlik yedeği alır, yalnızca uygulamayı değiştirir ve sağlık kontrolü yapar. Başlatma başarısızsa eski uygulama klasörü geri alınır. Bu güncelleme PostgreSQL ana sürümünü değiştirmez; 16→17 gibi geçişler ayrıca `pg_upgrade` / yedekten taşıma ile planlanmalıdır. Kaldırma sırasında `data` klasörü otomatik silinmez.
 
-Kurulum `C:\Program Files\Personel26` altına yapılır; kaldırma sırasında
-veritabanının silinip silinmeyeceği kullanıcıya sorulur.
+## Paket üretimi
 
----
+Geliştirici makinesinde Node.js 22+ gerekir. Son kullanıcıda gerekmez.
 
-## Sık Sorulanlar
+`powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1`
 
-**Port çakışması olursa?** `Personel26-Baslat.bat` içindeki `APPPORT=3210` ve
-`PGPORT=5433` değerlerini değiştirin. Bilinçli olarak standart olmayan portlar
-seçildi; mevcut PostgreSQL/IIS kurulumlarıyla çakışmaz.
+Paketleyici tip üretimi, TypeScript ve üretim derlemesini kontrol eder; sabitlenmiş Node.js 22.22.3 ve PostgreSQL 16.13-1 x64 dosyalarını indirir. Node arşivi resmi SHA-256 ile doğrulanır. Geliştirme `.env` dosyaları çıkarılır. `manifest.json` sürüm ve arşiv hashlerini içerir. Ardından Inno Setup 6 ile `windows/installer.iss` derlenir.
 
-**Windows Defender/SmartScreen uyarısı?** İmzasız bat/exe dosyalarında normaldir;
-"Ek bilgi → Yine de çalıştır" deyin. Kurumsal dağıtımda kod imzalama sertifikası
-eklenebilir.
+## Otomatik Windows testleri
 
-**Birden fazla bilgisayardan erişim?** `Personel26-Baslat.bat` içinde
-`HOSTNAME=127.0.0.1` satırını `HOSTNAME=0.0.0.0` yapın; diğer PC'ler
-`http://SUNUCU-IP:3210` ile bağlanır (Windows Güvenlik Duvarı'nda 3210'a izin verin).
+`.github/workflows/windows-test.yml` main push, pull request ve elle tetikleme için hazırdır. Ayrı paketleme job'u çalışır; Windows 2022 ve 2025 job'larında **setup-node yoktur**. PATH yalnızca Windows sistem klasörleri ile sınırlandırılır, kurulu PostgreSQL servisleri durdurulur. Çalışan Node/PostgreSQL'in paket içinden geldiği doğrulanır.
 
-**Güncelleme nasıl yapılır?** Yeni paketteki `app\` klasörünü eskisinin üzerine
-kopyalayın. `data\` klasörüne DOKUNMAYIN — verileriniz oradadır.
-Yeni sürümde tablo değişikliği varsa `schema.sql` guncellemesi not edilir.
+Test senaryoları: sessiz kurulum, ilk açılış, gerçek veritabanı sağlık kontrolü, şema sürümü, SQL yedek/geri yükleme, başka Node süreçlerinin korunması, kapatma, yeniden açma, veri koruyan uygulama güncellemesi ve üzerine yeniden kurulum. Raporlar ve loglar Actions artifact'ine yazılır; parola dosyası ve SQL yedeği yüklenmez.
 
-**Windows açılışında otomatik başlasın?** `Personel26-Baslat.bat` kısayolunu
-`shell:startup` klasörüne koyun (Win+R → `shell:startup`).
+**Durum:** Bu geliştirme ortamı Linux'tur. Windows job'ları burada çalıştırılmadı ve başarılı oldukları iddia edilmez. Değişiklikleri GitHub'a gönderdikten sonra gerçek Actions sonuçlarını inceleyin. GitHub-hosted runner tam temiz son kullanıcı Windows'u değildir; PATH izolasyonu sistem araçlarına bağımlılığı test eder. Son dağıtım onayı için temiz Windows 10/11 sanal veya fiziksel makinede standart kullanıcı, Visual C++ çalışma zamanı, antivirüs/SmartScreen, çevrimdışı başlatma ve port çakışması kontrollerini ayrıca yapın.
+
+## Veri güvenliği
+
+Yerel diskteki yedek fiziksel arızaya karşı yeterli değildir: harici disk yedeği tutun. Mevcut panelde kullanıcı girişi/rol kontrolü yoktur. Yerel ağ veya internet erişimi vermeden önce kimlik doğrulama, yetkilendirme ve TLS eklenmelidir. GitHub Pages sürümü verileri sadece o tarayıcının IndexedDB alanında tutar; kurumun ortak çok kullanıcılı veritabanı yerine geçmez.

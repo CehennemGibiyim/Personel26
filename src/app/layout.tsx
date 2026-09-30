@@ -5,6 +5,8 @@ import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/space-grotesk";
 import "./globals.css";
+import "./settings.css";
+import ThemeLoader from "@/components/ThemeLoader";
 import { BROWSER_BOOT_INLINE } from "@/lib/browser-db/inline-boot";
 
 /** GitHub Pages (statik) sürümü: veritabanı tarayıcıda çalışır. */
@@ -34,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <script type="module" src={`${BASE_PATH}/pglite/app.js`} />
           </>
         ) : null}
+        <ThemeLoader />
         {children}
       </body>
     </html>

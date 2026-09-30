@@ -14,6 +14,8 @@ import { Btn, Modal, Field, TextInput, SelectInput, TextArea, Badge, Spinner, Em
 import { downloadFromApi } from "@/lib/download";
 import { useAvatarSrc } from "@/components/avatar-src";
 
+import PersonnelImport from "@/components/PersonnelImport";
+import type { AppSettings } from "@/lib/settings";
 import { fileToSquareDataUrl } from "@/lib/image-resize";
 
 async function api(path: string, method: string, body?: unknown) {
@@ -41,6 +43,14 @@ export default function PersonnelPage({
   const [groupFilter, setGroupFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [maskTc, setMaskTc] = useState(true);
+  useEffect(() => {
+    try { const stored = localStorage.getItem("p26-settings"); if (stored) setMaskTc(JSON.parse(stored).maskTc !== false); } catch {}
+    const listener = (event: Event) => setMaskTc((event as CustomEvent<AppSettings>).detail.maskTc);
+    window.addEventListener("p26-settings", listener);
+    return () => window.removeEventListener("p26-settings", listener);
+  }, []);
   const [editing, setEditing] = useState<Personnel | null>(null);
   const [detail, setDetail] = useState<Personnel | null>(null);
   const [err, setErr] = useState("");
@@ -77,7 +87,7 @@ export default function PersonnelPage({
       if (q && !(p.name.toLocaleLowerCase("tr").includes(q) || (p.title ?? "").toLocaleLowerCase("tr").includes(q) || (p.tcNo ?? "").includes(q))) return false;
       return true;
     });
-  }, [list, query, deptFilter, typeFilter, statusFilter]);
+  }, [list, query, deptFilter, typeFilter, groupFilter, statusFilter]);
 
   const stats = useMemo(() => {
     const active = list.filter(p => p.isActive);
@@ -115,13 +125,14 @@ export default function PersonnelPage({
       .catch(e => alert(e instanceof Error ? e.message : "İndirme başarısız"));
   }
 
-  const hasFilter = query.trim() !== "" || deptFilter !== "ALL" || typeFilter !== "ALL" || statusFilter !== "ALL";
+  const hasFilter = query.trim() !== "" || deptFilter !== "ALL" || typeFilter !== "ALL" || groupFilter !== "ALL" || statusFilter !== "ALL";
   function clearFilters() {
-    setQuery(""); setDeptFilter("ALL"); setTypeFilter("ALL"); setStatusFilter("ALL");
+    setQuery(""); setDeptFilter("ALL"); setTypeFilter("ALL"); setGroupFilter("ALL"); setStatusFilter("ALL");
   }
 
   return (
     <div className="space-y-3">
+      {showImport && <Modal wide title="Excel / CSV’den toplu personel aktarımı" icon={<Upload className="w-4 h-4" />} onClose={() => setShowImport(false)}><PersonnelImport departments={departments} onDone={refreshAll} /></Modal>}
       {/* Başlık */}
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-bold text-white flex items-center gap-2" style={{ fontFamily: "var(--font-grotesk)" }}>
@@ -130,6 +141,7 @@ export default function PersonnelPage({
         <div className="flex-1" />
         <Btn small onClick={() => load()} title="Yenile"><RefreshCw className="w-3.5 h-3.5" /></Btn>
         <Btn small variant="success" onClick={exportExcel} title="Listelenen personeli Excel olarak indir"><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
+        <Btn small onClick={() => setShowImport(true)}><Upload className="w-3.5 h-3.5" /> Excel / CSV Aktar</Btn>
         <Btn small variant="primary" onClick={() => setShowAdd(true)}><Plus className="w-3.5 h-3.5" /> Yeni Personel</Btn>
       </div>
 
@@ -219,7 +231,7 @@ export default function PersonnelPage({
                           <Avatar person={p} size={36} className="group-hover:ring-2 group-hover:ring-sky-400/40 transition" />
                           <span className="min-w-0">
                             <span className="block text-white font-bold text-xs truncate group-hover:text-sky-300 transition">{p.name}</span>
-                            <span className="block text-white/35 text-[11px] truncate">{p.title ?? "—"}{p.tcNo ? ` · ${p.tcNo}` : ""}</span>
+                            <span className="block text-white/35 text-[11px] truncate">{p.title ?? "—"}{p.tcNo ? ` · ${maskTc ? "•••••••" + p.tcNo.slice(-4) : p.tcNo}` : ""}</span>
                           </span>
                         </button>
                       </td>
