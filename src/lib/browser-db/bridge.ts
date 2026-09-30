@@ -60,20 +60,19 @@ export function bootBrowserDb(): Promise<void> {
     const stamp = schemaStamp();
     const previous = readStamp();
 
-    if (previous && previous !== stamp) {
-      // Şema değişmiş: eski demo veritabanını temizleyip yeniden kur.
-      report("Veritabanı şeması yenileniyor…");
-      await dropSchema(pg);
-      writeStamp(stamp);
-      window.setTimeout(() => window.location.reload(), 400);
-      return;
-    }
-    if (!previous) writeStamp(stamp);
-
     if (!(await schemaExists(pg))) {
       report("Tablolar oluşturuluyor…");
       await createSchema(pg);
     }
+    // Şema parmak izi değişse bile kullanıcı verileri ASLA otomatik silinmez.
+    report(previous && previous !== stamp ? "Veriler korunarak şema güncelleniyor…" : "Şema kontrol ediliyor…");
+    const { db } = await import("./pglite-client");
+    const { sql } = await import("drizzle-orm");
+    const { schemaUpdateStatements } = await import("@/lib/schema-updates");
+    await db.transaction(async tx => {
+      for (const statement of schemaUpdateStatements()) await tx.execute(sql.raw(statement));
+    });
+    writeStamp(stamp);
 
     report("Örnek veriler yükleniyor…");
     // Sunuculu sürümdekiyle aynı çekirdek: senkron + yedek + örnek veri.

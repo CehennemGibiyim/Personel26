@@ -176,6 +176,24 @@ export const announcements = pgTable("announcements", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey().default("global"),
+  data: jsonb("data").notNull().$type<Record<string, unknown>>().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const schemaVersions = pgTable("schema_versions", {
+  id: text("id").primaryKey(),
+  installedAt: timestamp("installed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const activityLogs = pgTable("activity_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  action: text("action").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const dbBackups = pgTable("db_backups", {
   id: uuid("id").defaultRandom().primaryKey(),
   filename: text("filename").notNull(),
