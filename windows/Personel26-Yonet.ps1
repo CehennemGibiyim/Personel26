@@ -63,6 +63,22 @@ if (-not (Test-Path $ConfigFile)) {
 $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 $env:PGPASSWORD = $Config.password
 $PgArgs = @('-h','127.0.0.1','-p',[string]$Config.pgPort,'-U',$Config.user)
+function Start-PgServer {
+  # pg_ctl start komutu boru hattina (| Write-Host) baglanirsa, arka planda kalan
+  # postgres sureci ayni boruyu miras alir ve PowerShell hic bitmez. Bu yuzden
+  # sunucu ayri bir surec olarak baslatilir, hazir olana kadar pg_isready ile beklenir.
+  $pgCtl = Join-Path $PgBin 'pg_ctl.exe'
+  $isReady = Join-Path $PgBin 'pg_isready.exe'
+  $log = Join-Path $Data 'postgres.log'
+  $args = @('start','-D',('"' + $PgData + '"'),'-o',('"-p ' + $Config.pgPort + ' -c listen_addresses=127.0.0.1"'),'-l',('"' + $log + '"'))
+  Start-Process -FilePath $pgCtl -ArgumentList $args -WindowStyle Hidden | Out-Null
+  for ($i = 0; $i -lt 60; $i++) {
+    & $isReady -h 127.0.0.1 -p ([string]$Config.pgPort) *> $null
+    if ($LASTEXITCODE -eq 0) { Write-Host 'PostgreSQL hazir.'; return }
+    Start-Sleep -Seconds 1
+  }
+  throw 'PostgreSQL 60 saniyede baslamadi. data/postgres.log dosyasini inceleyin.'
+}
 function Ensure-Database {
   if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) {
     $pwfile = Join-Path $Data ('pw-' + [guid]::NewGuid().ToString() + '.tmp')
@@ -73,7 +89,7 @@ function Ensure-Database {
   }
   & (Join-Path $PgBin 'pg_ctl.exe') status -D $PgData *> $null
   if ($LASTEXITCODE -ne 0) {
-    Invoke-Pg -Tool 'pg_ctl' -Arguments @('start','-D',$PgData,'-o',"-p $($Config.pgPort) -c listen_addresses=127.0.0.1",'-l',(Join-Path $Data 'postgres.log'),'-w','-t','60')
+    Start-PgServer
   }
   $exists = & (Join-Path $PgBin 'psql.exe') @PgArgs -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='personel26'"
   if ($LASTEXITCODE -ne 0) { throw 'Veritabani baglantisi kurulamadı.' }
