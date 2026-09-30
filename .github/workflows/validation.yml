@@ -34,7 +34,7 @@ jobs:
       - run: npx next typegen
       - run: npm exec tsc -- --noEmit --pretty false
       - run: npm run build
-      - run: npx drizzle-kit push
+      - run: npx drizzle-kit push --config=drizzle.config.ts
       - name: API, transaction, aktarim ve arayuz testleri
         run: |
           cp -r .next/static .next/standalone/.next/static
