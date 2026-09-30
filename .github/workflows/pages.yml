@@ -39,10 +39,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Bağımlılıkları kur
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
         env:
           # Tarayıcı testleri için Chrome indirmeye gerek yok
           PUPPETEER_SKIP_DOWNLOAD: "1"
