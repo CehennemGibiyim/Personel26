@@ -1,0 +1,3 @@
+Excel Satırı;Ad Soyad;TC;Durum;Açıklama
+2;ARAYÜZ TEST PERSONEL;33333333330;valid;
+3;HATALI TEST SATIRI;123;error;TC kimlik numarası 11 haneli ve kontrol basamakları geçerli olmalıdır. | Personel sınıfı İşçi, Memur veya Hemşire olmalıdır. | Servis bulunamadı: Olmayan servis | En az bir servis ataması gereklidir.
