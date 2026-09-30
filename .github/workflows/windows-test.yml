@@ -24,7 +24,7 @@ jobs:
       - name: Next.js tiplerini üret
         run: npx next typegen
       - name: TypeScript kontrolü
-        run: npm exec tsc -- --noEmit --pretty false
+        run: npx tsc --noEmit --pretty false
       - name: Üretim derlemesi
         run: npm run build
       - name: Taşınabilir paket üret
