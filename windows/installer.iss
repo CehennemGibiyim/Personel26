@@ -48,5 +48,5 @@ begin
       Result := 'Personel26 kapatma işlemi başarısız. Uygulamayı kapatıp tekrar deneyin.';
   end;
 end;
-; Veritabanı sonradan data/ içinde oluşur ve Inno Setup tarafından kaydedilmez.
-; Kaldırma veya güncelleme sırasında data/ asla silinmez.
+// Veritabanı sonradan data/ içinde oluşur ve Inno Setup tarafından kaydedilmez.
+// Kaldırma veya güncelleme sırasında data/ asla silinmez.
