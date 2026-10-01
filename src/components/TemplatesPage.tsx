@@ -5,7 +5,7 @@ import {
   MONTHS, type Department, type Personnel, type ShiftTemplate, type TemplateColumn,
   personnelInDepartment, normalizeTemplateColumns, formatDutyColumn,
 } from "@/lib/shared";
-import { STAFF_GROUP_META, type StaffGroup } from "@/lib/shared";
+import { staffGroupMeta, type StaffGroup } from "@/lib/shared";
 import { Btn, Modal, Field, TextInput, cx } from "@/components/ui-kit";
 
 async function api(path: string, method: string, body?: unknown) {
@@ -167,7 +167,7 @@ export default function TemplatesPage({
               </div>
               <div className="flex flex-wrap gap-2">
                 <Btn small variant="amber" onClick={() => applyTemplate(t)} disabled={busy} title="Yalnızca sütun düzenini kur">
-                  {deptName} · {STAFF_GROUP_META[staffGroup].short} çizelgesine uygula
+                  {deptName} · {staffGroupMeta(staffGroup).short} çizelgesine uygula
                 </Btn>
                 <Btn small variant="primary" onClick={() => processTemplate(t)} disabled={busy} title={`${MONTHS[month]} ${year} ayını bu şablonla doldur`}>
                   <Wand2 className="w-3.5 h-3.5" /> {MONTHS[month]} {year} Ayına İşle

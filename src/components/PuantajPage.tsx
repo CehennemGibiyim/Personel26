@@ -11,7 +11,7 @@ import {
   personnelInDepartment, slotByKey, isNightRange, LEAVE_CODE_MAP,
   PERSONNEL_TYPE_META, cyclePersonnelType,
 } from "@/lib/shared";
-import { STAFF_GROUP_META, type StaffGroup } from "@/lib/shared";
+import { staffGroupMeta, type StaffGroup } from "@/lib/shared";
 import { getShiftMetrics, normalizeShiftCode, isKnownCode, getShiftRangeMetrics } from "@/lib/puantaj-engine";
 import { Btn, Spinner } from "@/components/ui-kit";
 import { downloadFromApi } from "@/lib/download";
@@ -59,6 +59,7 @@ function grossHours(start?: string | null, end?: string | null): number {
 export default function PuantajPage({
   departments, personnel, holidays, selectedDept, year, month,
   onPersonnelChanged,
+  onDepartmentUpdated,
   staffGroup = "SAGLIK",
 }: {
   departments: Department[];
@@ -67,6 +68,7 @@ export default function PuantajPage({
   selectedDept: string;
   year: number; month: number;
   onPersonnelChanged: () => Promise<void> | void;
+  onDepartmentUpdated?: (d: Department) => void;
   /** Hemşire/Sağlık veya Temizlik/Destek — puantaj ve çıktılar bu gruba aittir */
   staffGroup?: StaffGroup;
 }) {
@@ -670,7 +672,7 @@ export default function PuantajPage({
       {/* ═════ YAZDIRMA ALANI — hafta blokları + aylık özet (görseldeki form) ═════ */}
       <PrintArea>
         <div className="print-title">
-          <h1>{deptName.toLocaleUpperCase("tr")} — {STAFF_GROUP_META[staffGroup].print} — {MONTHS[month]} {year} — PUANTAJ FORMU</h1>
+          <h1>{deptName.toLocaleUpperCase("tr")} — {staffGroupMeta(staffGroup).print} — {MONTHS[month]} {year} — PUANTAJ FORMU</h1>
         </div>
         <div className="code-legend">
           <b>Kod açıklamaları:</b> G = Gündüz 8 brüt / 7,5 net · G2 = Gündüz 12 brüt / 11 net · N = Gece 8 brüt / 7,5 net · N2 = Gece 12 brüt / 11 net · B = Bayram 8 brüt / 7,5 net · B2 = Bayram 12 brüt / 11 net · Nöbetler saat aralığına göre G/N kodu ve gerçek net saat olarak gösterilir.
@@ -800,7 +802,7 @@ export default function PuantajPage({
       {showSig && dept && (
         <SignatureModal
           department={dept}
-          onSaved={d => setDeptList(prev => prev.map(x => x.id === d.id ? { ...x, ...d } : x))}
+          onSaved={d => { setDeptList(prev => prev.map(x => x.id === d.id ? { ...x, ...d } : x)); onDepartmentUpdated?.(d); }}
           onClose={() => setShowSig(false)}
         />
       )}

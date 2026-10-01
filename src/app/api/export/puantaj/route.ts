@@ -1,5 +1,5 @@
 import { buildPuantajExport, xlsxResponse, csvResponse, safeFileName } from "@/lib/server/export";
-import { MONTHS, parseStaffGroup, STAFF_GROUP_META } from "@/lib/shared";
+import { MONTHS, parseStaffGroup, staffGroupMeta } from "@/lib/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     }
     const group = parseStaffGroup(url.searchParams.get("group"));
     const data = await buildPuantajExport(dept, year, month, group);
-    const base = safeFileName("puantaj", data.deptName, STAFF_GROUP_META[group].file, MONTHS[month] ?? "", year);
+    const base = safeFileName("puantaj", data.deptName, staffGroupMeta(group).file, MONTHS[month] ?? "", year);
     return format === "csv" ? csvResponse(data.csvRows, `${base}.csv`) : xlsxResponse(data.sheets, `${base}.xlsx`);
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Dışa aktarma hatası" }, { status: 500 });

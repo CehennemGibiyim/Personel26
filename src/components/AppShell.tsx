@@ -2,10 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole,
+  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Wrench, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole,
 } from "lucide-react";
 import type { Department, Personnel, Holiday, ShiftTemplate, StaffGroup } from "@/lib/shared";
-import { STAFF_GROUP_META, STAFF_GROUP_ORDER, staffGroupOf, personnelInDepartment } from "@/lib/shared";
+import { staffGroupMeta, staffGroupOf, personnelInDepartment, listStaffGroups, setExtraGroups, makeCustomGroup, isCustomGroup, parseStaffGroup } from "@/lib/shared";
 import { MonthNav, Btn, Modal, Field, TextInput, cx } from "@/components/ui-kit";
 import { downloadPanelPreview } from "@/lib/download-preview";
 import PuantajPage from "@/components/PuantajPage";
@@ -65,6 +65,18 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const [month, setMonth] = useState(() => initialData?.today?.month ?? new Date().getMonth());
   const [page, setPage] = useState<PageKey>("ayarlar");
   const [staffGroup, setStaffGroup] = useState<StaffGroup>("SAGLIK");
+  // Elle eklenen nöbet grupları: personeli olmayanlar bu tarayıcıda saklanır.
+  const [customGroups, setCustomGroups] = useState<StaffGroup[]>([]);
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem("p26-custom-groups") || "[]");
+      if (Array.isArray(raw)) setCustomGroups(raw.map(parseStaffGroup).filter(isCustomGroup));
+    } catch {}
+  }, []);
+  function saveCustomGroups(list: StaffGroup[]) {
+    setCustomGroups(list);
+    try { localStorage.setItem("p26-custom-groups", JSON.stringify(list)); } catch {}
+  }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState<false | "add" | "edit">(false);
   const [deptOpen, setDeptOpen] = useState(false);
@@ -86,6 +98,11 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
     const handler = (event: Event) => setPreferences((event as CustomEvent<AppSettings>).detail);
     window.addEventListener("p26-settings", handler);
     return () => window.removeEventListener("p26-settings", handler);
+  }, []);
+
+  /** İmza alanı gibi servis bilgileri kaydedilince tüm sayfalar (puantaj, nöbet çıktısı) güncel veriyi görsün. */
+  const updateDepartment = useCallback((d: Department) => {
+    setDepartments(prev => prev.map(x => x.id === d.id ? { ...x, ...d } : x));
   }, []);
 
   const loadBootstrap = useCallback(async () => {
@@ -127,28 +144,57 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const deptName = departments.find(d => d.id === selectedDept)?.name ?? "";
   // Seçili grubun personeli: puantaj/nöbet hesapları yalnızca bu listeyle yapılır
   const groupPersonnel = personnel.filter(p => staffGroupOf(p) === staffGroup);
+  setExtraGroups(customGroups);
+  const allGroups = listStaffGroups(personnel);
+  setExtraGroups(allGroups);
   const groupCount = (g: StaffGroup) =>
     personnel.filter(p => p.isActive && staffGroupOf(p) === g && personnelInDepartment(p, selectedDept)).length;
   const showGroup = GROUP_PAGES.includes(page);
+  function addCustomGroup() {
+    const name = window.prompt("Yeni nöbet grubunun adı (örn. Anestezi Teknikerleri, Laboratuvar, Güvenlik):");
+    if (name === null) return;
+    const id = makeCustomGroup(name);
+    if (!id) { window.alert("Grup adı en az 2 karakter olmalıdır."); return; }
+    if (!allGroups.includes(id)) saveCustomGroups([...customGroups, id]);
+    setStaffGroup(id);
+  }
+  function removeCustomGroup(g: StaffGroup) {
+    if (personnel.some(p => staffGroupOf(p) === g)) { window.alert("Bu grupta personel var. Önce personeli başka bir gruba taşıyın."); return; }
+    if (!window.confirm(`"${staffGroupMeta(g).label}" grubu kaldırılsın mı?`)) return;
+    saveCustomGroups(customGroups.filter(x => x !== g));
+    if (staffGroup === g) setStaffGroup("SAGLIK");
+  }
+  const groupIcon = (g: StaffGroup) => g === "SAGLIK" ? Stethoscope : g === "DESTEK" ? SprayCan : g === "TEKNISYEN" ? Wrench : ClipboardList;
   const groupSwitch = (compact = false) => (
-    <div className="flex items-center gap-1 bg-white/[.05] border border-white/10 rounded-xl p-1 shrink-0" role="tablist" aria-label="Personel grubu">
-      {STAFF_GROUP_ORDER.map(g => (
-        <button
-          key={g}
-          type="button"
-          role="tab"
-          aria-selected={staffGroup === g}
-          onClick={() => setStaffGroup(g)}
-          title={`${STAFF_GROUP_META[g].label} — ${STAFF_GROUP_META[g].desc}`}
-          className={cx(
-            "px-2.5 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer whitespace-nowrap",
-            staffGroup === g ? STAFF_GROUP_META[g].tab : "border-transparent text-white/45 hover:text-white"
-          )}
-        >
-          {g === "SAGLIK" ? <Stethoscope className="w-3.5 h-3.5 inline -mt-0.5 mr-1" /> : <SprayCan className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />}{compact ? STAFF_GROUP_META[g].short.split(" ")[0] : STAFF_GROUP_META[g].short}
-          <span className="ml-1 opacity-60">({groupCount(g)})</span>
-        </button>
-      ))}
+    <div className="flex items-center gap-1 bg-white/[.05] border border-white/10 rounded-xl p-1 max-w-full overflow-x-auto" role="tablist" aria-label="Personel grubu">
+      {allGroups.map(g => {
+        const Icon = groupIcon(g);
+        const meta = staffGroupMeta(g);
+        return (
+          <span key={g} className="inline-flex items-center shrink-0">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={staffGroup === g}
+              onClick={() => setStaffGroup(g)}
+              title={`${meta.label} — ${meta.desc}`}
+              className={cx(
+                "px-2.5 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer whitespace-nowrap",
+                staffGroup === g ? meta.tab : "border-transparent text-white/45 hover:text-white"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5 inline -mt-0.5 mr-1" />{compact ? meta.short.split(" ")[0] : meta.short}
+              <span className="ml-1 opacity-60">({groupCount(g)})</span>
+            </button>
+            {isCustomGroup(g) && staffGroup === g && (
+              <button type="button" aria-label="Grubu kaldır" title="Grubu kaldır (personeli yoksa)" onClick={() => removeCustomGroup(g)} className="ml-0.5 p-1 rounded text-white/40 hover:text-rose-300 cursor-pointer"><X className="w-3 h-3" /></button>
+            )}
+          </span>
+        );
+      })}
+      <button type="button" onClick={addCustomGroup} title="Elle yeni nöbet grubu ekle" className="px-2 py-1.5 rounded-lg border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0">
+        <Plus className="w-3.5 h-3.5 inline -mt-0.5" /> Özel
+      </button>
     </div>
   );
   const navItem = NAV.find(n => n.key === page)!;
@@ -368,10 +414,11 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
                   departments={departments} personnel={groupPersonnel} holidays={holidays}
                   selectedDept={selectedDept} year={year} month={month} staffGroup={staffGroup}
                   onPersonnelChanged={loadBootstrap}
+                  onDepartmentUpdated={updateDepartment}
                 />
               )}
               {page === "nobet" && (
-                <NobetPage key={`n-${staffGroup}`} departments={departments} personnel={groupPersonnel} holidays={holidays} selectedDept={selectedDept} year={year} month={month} staffGroup={staffGroup} />
+                <NobetPage key={`n-${staffGroup}`} onDepartmentUpdated={updateDepartment} departments={departments} personnel={groupPersonnel} holidays={holidays} selectedDept={selectedDept} year={year} month={month} staffGroup={staffGroup} />
               )}
               {page === "sablon" && (
                 <TemplatesPage

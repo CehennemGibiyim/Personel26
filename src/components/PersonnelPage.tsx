@@ -9,7 +9,7 @@ import {
   type Department, type Personnel, type PersonnelType,
   PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, TITLE_SUGGESTIONS, cyclePersonnelType, fmtTr,
 } from "@/lib/shared";
-import { STAFF_GROUP_META, STAFF_GROUP_ORDER, staffGroupOf, suggestedGroupForTitle, type StaffGroup } from "@/lib/shared";
+import { staffGroupMeta, listStaffGroups, staffGroupOf, suggestedGroupForTitle, type StaffGroup } from "@/lib/shared";
 import { Btn, Modal, Field, TextInput, SelectInput, TextArea, Badge, Spinner, EmptyState, Avatar, cx } from "@/components/ui-kit";
 import { downloadFromApi } from "@/lib/download";
 import { useAvatarSrc } from "@/components/avatar-src";
@@ -102,8 +102,10 @@ export default function PersonnelPage({
     await refreshAll();
   }
   async function toggleGroup(p: Personnel) {
-    const next: StaffGroup = staffGroupOf(p) === "SAGLIK" ? "DESTEK" : "SAGLIK";
-    if (!confirm(`"${p.name}" ${STAFF_GROUP_META[next].label} grubuna taşınsın mı?\n\nBundan sonra bu grubun nöbet çizelgesi ve puantajında yer alır.`)) return;
+    // Gruplar arasında sırayla geçer: Hemşire → Temizlik → Teknisyen → (özel gruplar) → Hemşire
+    const groups = listStaffGroups(list);
+    const next: StaffGroup = groups[(Math.max(0, groups.indexOf(staffGroupOf(p))) + 1) % groups.length];
+    if (!confirm(`"${p.name}" ${staffGroupMeta(next).label} grubuna taşınsın mı?\n\nBundan sonra bu grubun nöbet çizelgesi ve puantajında yer alır.`)) return;
     await api("/api/personnel", "PATCH", { id: p.id, staffGroup: next });
     await refreshAll();
   }
@@ -185,7 +187,7 @@ export default function PersonnelPage({
         <select value={groupFilter} onChange={e => setGroupFilter(e.target.value)}
           className="bg-white/[.06] border border-white/12 rounded-lg px-2.5 py-2 text-white text-xs font-semibold outline-none focus:border-sky-400/60 [&>option]:bg-slate-900">
           <option value="ALL">Tüm Gruplar</option>
-          {STAFF_GROUP_ORDER.map(g => <option key={g} value={g}>{STAFF_GROUP_META[g].label}</option>)}
+          {listStaffGroups(list).map(g => <option key={g} value={g}>{staffGroupMeta(g).label}</option>)}
         </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="bg-white/[.06] border border-white/12 rounded-lg px-2.5 py-2 text-white text-xs font-semibold outline-none focus:border-sky-400/60 [&>option]:bg-slate-900">
@@ -239,8 +241,8 @@ export default function PersonnelPage({
                         <button onClick={() => cycleType(p)} title={`${meta.label} (${meta.weekly}/hf) — tıkla değiştir: ${PERSONNEL_TYPE_META[cyclePersonnelType(p.personnelType)].label}`}>
                           <Badge className={cx(meta.badge, "hover:brightness-125 transition cursor-pointer")}>{meta.upper}</Badge>
                         </button>
-                        <button onClick={() => toggleGroup(p)} title={`${STAFF_GROUP_META[staffGroupOf(p)].label} — tıkla: diğer gruba taşı`} className="block mt-1">
-                          <Badge className={cx(STAFF_GROUP_META[staffGroupOf(p)].badge, "hover:brightness-125 transition cursor-pointer")}>{staffGroupOf(p) === "SAGLIK" ? "Hemşire/Sağlık" : "Temizlik/Destek"}</Badge>
+                        <button onClick={() => toggleGroup(p)} title={`${staffGroupMeta(staffGroupOf(p)).label} — tıkla: sıradaki gruba taşı`} className="block mt-1">
+                          <Badge className={cx(staffGroupMeta(staffGroupOf(p)).badge, "hover:brightness-125 transition cursor-pointer")}>{staffGroupMeta(staffGroupOf(p)).short.replace(" ", "")}</Badge>
                         </button>
                       </td>
                       <td className="px-2 py-2">
@@ -539,16 +541,16 @@ function PersonnelFormModal({ departments, defaultDeptId, initial, onClose, onSa
 
         <Field label="Personel Grubu *" hint="Her grubun ayrı nöbet çizelgesi ve ayrı puantajı vardır.">
           <div className="grid grid-cols-2 gap-2">
-            {STAFF_GROUP_ORDER.map(g => (
+            {listStaffGroups().map(g => (
               <button
                 key={g} type="button" onClick={() => { setGroup(g); setGroupTouched(true); }}
                 className={cx(
                   "py-2.5 rounded-xl border text-xs font-medium transition",
-                  group === g ? STAFF_GROUP_META[g].tab : "bg-white/5 border-white/15 text-white/50 hover:border-white/30"
+                  group === g ? staffGroupMeta(g).tab : "bg-white/5 border-white/15 text-white/50 hover:border-white/30"
                 )}
               >
-                <div className="text-xs font-bold mb-0.5">{STAFF_GROUP_META[g].short}</div>
-                <div className="text-[10px] opacity-70">{STAFF_GROUP_META[g].desc}</div>
+                <div className="text-xs font-bold mb-0.5">{staffGroupMeta(g).short}</div>
+                <div className="text-[10px] opacity-70">{staffGroupMeta(g).desc}</div>
               </button>
             ))}
           </div>

@@ -173,6 +173,22 @@ if (createdId) {
   check("DELETE /api/personnel (silme)", delRes.status === 200, `durum ${delRes.status}`);
 }
 
+// Teknisyen grubu ve elle eklenen özel nöbet grubu
+for (const [grp, label] of [["TEKNISYEN", "Teknisyen"], ["OZEL:Anestezi Teknikerleri", "Özel grup"]]) {
+  const { res: gRes, data: gCreated } = await json("/api/personnel", post({ name: "GRUP TESTİ " + label.toUpperCase(), title: "Teknisyen", personnelType: "ISCI", staffGroup: grp, departmentIds: [deptId], departmentId: deptId }));
+  const gId = gCreated.personnel?.id;
+  check(`${label}: personel oluşturuldu, grup korundu`, gRes.status === 200 && gCreated.personnel?.staffGroup === grp, `durum ${gRes.status} ${gCreated.personnel?.staffGroup}`);
+  const q = encodeURIComponent(grp);
+  const { res: rRes, data: rData } = await json(`/api/roster?dept=${deptId}&year=${year}&month=${month}&group=${q}`);
+  check(`${label}: nöbet çizelgesi açılıyor`, rRes.status === 200 && Array.isArray(rData.columns) && rData.columns.length > 0, `durum ${rRes.status} ${JSON.stringify(rData).slice(0, 100)}`);
+  const xr = await api(`/api/export/nobet?dept=${deptId}&year=${year}&month=${month}&format=xlsx&group=${q}`);
+  check(`${label}: nöbet Excel çıktısı`, xr.status === 200, `durum ${xr.status}`);
+  if (gId) await json("/api/personnel", { ...post({ id: gId, hard: true }), method: "DELETE" });
+}
+const { data: badGroup } = await json("/api/personnel", post({ name: "GRUP TESTİ GEÇERSİZ", personnelType: "ISCI", staffGroup: "OZEL:x", departmentIds: [deptId], departmentId: deptId }));
+check("Geçersiz (çok kısa) özel grup SAĞLIK'a düşer", badGroup.personnel?.staffGroup === "SAGLIK", String(badGroup.personnel?.staffGroup));
+if (badGroup.personnel?.id) await json("/api/personnel", { ...post({ id: badGroup.personnel.id, hard: true }), method: "DELETE" });
+
 const { res: leavesRes, data: leaves } = await json(`/api/leaves?personnel=${personId}`);
 check("GET /api/leaves 200", leavesRes.status === 200, `durum ${leavesRes.status}`);
 check("İzin kayıtları listelendi", Array.isArray(leaves.leaves));

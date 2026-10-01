@@ -12,29 +12,93 @@ export type PersonnelType = 'ISCI' | 'MEMUR' | 'HEMSIRE';
  * Her grubun KENDİ nöbet çizelgesi (sütun düzeni + atamalar), KENDİ puantajı
  * ve KENDİ çıktıları vardır; hesaplar grup bazında yapılır.
  */
-export type StaffGroup = 'SAGLIK' | 'DESTEK';
-export const STAFF_GROUP_ORDER: StaffGroup[] = ['SAGLIK', 'DESTEK'];
-export const STAFF_GROUP_META: Record<StaffGroup, {
+export type StaffGroup = string;
+/** Yerleşik gruplar. Kullanıcının elle eklediği gruplar "OZEL:<ad>" biçiminde saklanır. */
+export const BUILTIN_STAFF_GROUPS = ['SAGLIK', 'DESTEK', 'TEKNISYEN'] as const;
+export const STAFF_GROUP_ORDER: StaffGroup[] = [...BUILTIN_STAFF_GROUPS];
+export const CUSTOM_GROUP_PREFIX = 'OZEL:';
+export interface StaffGroupMeta {
   label: string; short: string; print: string; file: string; desc: string; badge: string; tab: string;
-}> = {
+}
+export const STAFF_GROUP_META: Record<string, StaffGroupMeta> = {
   SAGLIK: {
     label: 'Hemşire / Sağlık Personeli', short: 'Hemşire / Sağlık', print: 'HEMŞİRE / SAĞLIK PERSONELİ',
-    file: 'hemsire', desc: 'Hemşire, ebe, ATT, teknisyen, sekreter…',
+    file: 'hemsire', desc: 'Hemşire, ebe, ATT, sekreter…',
     badge: 'bg-sky-500/15 text-sky-300 border-sky-500/35',
     tab: 'bg-sky-500/25 text-sky-100 border-sky-400/60',
   },
   DESTEK: {
     label: 'Temizlik / Destek Personeli', short: 'Temizlik / Destek', print: 'TEMİZLİK / DESTEK PERSONELİ',
-    file: 'temizlik', desc: 'Temizlik, hasta bakım, güvenlik, mutfak, teknik…',
+    file: 'temizlik', desc: 'Temizlik, hasta bakım, güvenlik, mutfak…',
     badge: 'bg-amber-500/15 text-amber-300 border-amber-500/35',
     tab: 'bg-amber-500/25 text-amber-100 border-amber-400/60',
   },
+  TEKNISYEN: {
+    label: 'Teknisyen Personeli', short: 'Teknisyen', print: 'TEKNİSYEN PERSONELİ',
+    file: 'teknisyen', desc: 'Teknisyen, teknikerler, bakım-onarım…',
+    badge: 'bg-violet-500/15 text-violet-300 border-violet-500/35',
+    tab: 'bg-violet-500/25 text-violet-100 border-violet-400/60',
+  },
 };
+
+export function isCustomGroup(g: string | null | undefined): boolean {
+  return typeof g === 'string' && g.startsWith(CUSTOM_GROUP_PREFIX) && g.length > CUSTOM_GROUP_PREFIX.length;
+}
+/** Elle eklenen nöbet grubunun görünen adını temizler (2–30 karakter); geçersizse boş döner. */
+export function cleanCustomLabel(v: unknown): string {
+  const t = String(v ?? '').replace(/[\u0000-\u001f|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+  return t.length >= 2 ? t : '';
+}
+export function makeCustomGroup(label: string): StaffGroup | '' {
+  const l = cleanCustomLabel(label);
+  return l ? CUSTOM_GROUP_PREFIX + l : '';
+}
+function asciiSlug(t: string): string {
+  const map: Record<string, string> = { ç: 'c', ğ: 'g', ı: 'i', i: 'i', ö: 'o', ş: 's', ü: 'u' };
+  return t.toLocaleLowerCase('tr').replace(/[çğıiöşü]/g, c => map[c] ?? c).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ozel';
+}
+/** Yerleşik veya elle eklenmiş grubun görünüm bilgileri (hiçbir zaman undefined dönmez). */
+export function staffGroupMeta(g: string | null | undefined): StaffGroupMeta {
+  if (g && STAFF_GROUP_META[g]) return STAFF_GROUP_META[g];
+  if (isCustomGroup(g)) {
+    const label = cleanCustomLabel((g as string).slice(CUSTOM_GROUP_PREFIX.length)) || 'Özel Nöbet';
+    return {
+      label, short: label, print: label.toLocaleUpperCase('tr'), file: asciiSlug(label),
+      desc: 'Elle tanımlanan nöbet grubu',
+      badge: 'bg-rose-500/15 text-rose-300 border-rose-500/35',
+      tab: 'bg-rose-500/25 text-rose-100 border-rose-400/60',
+    };
+  }
+  return STAFF_GROUP_META.SAGLIK;
+}
 export function parseStaffGroup(v: unknown): StaffGroup {
-  return v === 'DESTEK' ? 'DESTEK' : 'SAGLIK';
+  if (typeof v === 'string') {
+    if ((BUILTIN_STAFF_GROUPS as readonly string[]).includes(v)) return v;
+    if (v.startsWith(CUSTOM_GROUP_PREFIX)) {
+      const label = cleanCustomLabel(v.slice(CUSTOM_GROUP_PREFIX.length));
+      if (label) return CUSTOM_GROUP_PREFIX + label;
+    }
+  }
+  return 'SAGLIK';
 }
 export function staffGroupOf(p: { staffGroup?: string | null }): StaffGroup {
   return parseStaffGroup(p.staffGroup);
+}
+/** Yeni sütun/servis adı önerisi: sağlık grubunda servis adı, diğerlerinde grubun adı. */
+export function defaultServiceName(group: StaffGroup, deptName: string): string {
+  if (group === 'SAGLIK') return deptName;
+  if (group === 'DESTEK') return 'Temizlik';
+  return staffGroupMeta(group).short;
+}
+
+// Tarayıcıda eklenen ama henüz personeli olmayan özel gruplar (AppShell yönetir).
+let extraGroups: StaffGroup[] = [];
+export function setExtraGroups(list: StaffGroup[]) { extraGroups = list.map(parseStaffGroup).filter(isCustomGroup); }
+/** Tüm gruplar: yerleşikler + personelde geçen özel gruplar + tarayıcıda eklenenler. */
+export function listStaffGroups(people: { staffGroup?: string | null }[] = []): StaffGroup[] {
+  const custom = new Set<StaffGroup>(extraGroups);
+  for (const p of people) { const g = parseStaffGroup(p.staffGroup); if (isCustomGroup(g)) custom.add(g); }
+  return [...BUILTIN_STAFF_GROUPS, ...[...custom].sort((a, b) => a.localeCompare(b, 'tr'))];
 }
 
 /** Personel sınıfı kartları: İşçi / Memur / Hemşire. */
@@ -102,6 +166,7 @@ const DESTEK_KEYWORDS = ["temizlik", "hasta bakım", "güvenlik", "aşçı", "ye
 export function suggestedGroupForTitle(title: string): StaffGroup | null {
   const t = title.trim().toLocaleLowerCase("tr");
   if (!t) return null;
+  if (t.includes("teknisyen")) return "TEKNISYEN";
   if (DESTEK_TITLES.has(t) || DESTEK_KEYWORDS.some(k => t.includes(k))) return "DESTEK";
   if (TITLE_SUGGESTIONS.some(x => x.toLocaleLowerCase("tr") === t)) return "SAGLIK";
   return null;

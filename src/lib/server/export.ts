@@ -7,7 +7,7 @@ import { and, eq, gte, lte, inArray } from "drizzle-orm";
 import {
   MONTHS, DAYS_FULL, dayName, isWeekendDay, isWeeklyRestDay, buildWeeks,
   requiredDailyHours, fmtDate, isNightRange, LEAVE_CODE_MAP, APPROVAL_FLOW, fmtTr,
-  personnelTypeLabel, STAFF_GROUP_META, type StaffGroup,
+  personnelTypeLabel, staffGroupMeta, type StaffGroup,
 } from "@/lib/shared";
 import { getShiftRangeMetrics } from "@/lib/puantaj-engine";
 import * as XLSX from "xlsx";
@@ -47,7 +47,7 @@ function monthRange(year: number, month: number) {
 // ══════════════════════════════════
 export async function buildPuantajExport(deptId: string, year: number, month: number, group?: StaffGroup) {
   const { dept, people, hols, ids } = await loadBase(deptId, year, month, group);
-  const groupLabel = group ? ` · ${STAFF_GROUP_META[group].label}` : "";
+  const groupLabel = group ? ` · ${staffGroupMeta(group).label}` : "";
   const deptName = dept?.name ?? "";
   const { dim, startD, endD } = monthRange(year, month);
 
@@ -212,7 +212,7 @@ export async function buildPuantajExport(deptId: string, year: number, month: nu
 // ══════════════════════════════════
 export async function buildNobetExport(deptId: string, year: number, month: number, group: StaffGroup = "SAGLIK") {
   const { dept, people, hols, ids } = await loadBase(deptId, year, month, group);
-  const groupLabel = ` · ${STAFF_GROUP_META[group].label}`;
+  const groupLabel = ` · ${staffGroupMeta(group).label}`;
   const deptName = dept?.name ?? "";
   const { dim, startD, endD } = monthRange(year, month);
   const allDays = Array.from({ length: dim }, (_, i) => i + 1);

@@ -5,7 +5,7 @@ import {
 } from "@/db/schema";
 import { and, eq, gte, lte, inArray, asc, desc } from "drizzle-orm";
 import { dutyColumnKey, normalizeTemplateColumns, type DutyColumn, type StaffGroup } from "@/lib/shared";
-import { rangesOverlap, STAFF_GROUP_META } from "@/lib/shared";
+import { rangesOverlap, staffGroupMeta } from "@/lib/shared";
 import { syncTimesheetFromSchedules } from "@/lib/server/core";
 
 // ═════════════════════════════════════════════════════════════
@@ -161,9 +161,10 @@ function defaultLayout(group: StaffGroup, deptName: string) {
       { service: "Temizlik", shiftLabel: "08:00–16:00", startTime: "08:00", endTime: "16:00" },
     ];
   }
+  const service = group === "SAGLIK" ? deptName : staffGroupMeta(group).short;
   return [
-    { service: deptName, shiftLabel: "08:00–20:00", startTime: "08:00", endTime: "20:00" },
-    { service: deptName, shiftLabel: "20:00–08:00", startTime: "20:00", endTime: "08:00" },
+    { service, shiftLabel: "08:00–20:00", startTime: "08:00", endTime: "20:00" },
+    { service, shiftLabel: "20:00–08:00", startTime: "20:00", endTime: "08:00" },
   ];
 }
 
@@ -339,7 +340,7 @@ export async function setRosterCell(deptId: string, date: string, columnKey: str
     // Grup koruması: hemşire çizelgesine temizlik personeli (veya tersi) atanamaz
     const person = (await db.select({ g: personnel.staffGroup }).from(personnel).where(eq(personnel.id, personnelId)))[0];
     if (person && person.g !== col.staffGroup) {
-      const gm = STAFF_GROUP_META[col.staffGroup as StaffGroup] ?? STAFF_GROUP_META.SAGLIK;
+      const gm = staffGroupMeta(col.staffGroup);
       throw Object.assign(new Error(`Bu sütun ${gm.label} çizelgesine ait; farklı gruptaki personel atanamaz.`), { status: 409 });
     }
   }
@@ -398,7 +399,7 @@ export async function createDraft(deptId: string, year: number, month: number, o
     .filter(p => memberIds.has(p.id) || p.departmentId === deptId)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
   if (!roster.length) {
-    throw new Error(`Bu serviste aktif ${STAFF_GROUP_META[group].label.toLocaleLowerCase("tr")} yok. Personel Yönetimi'nden ekleyin.`);
+    throw new Error(`Bu serviste aktif ${staffGroupMeta(group).label.toLocaleLowerCase("tr")} yok. Personel Yönetimi'nden ekleyin.`);
   }
   const rosterIds = new Set(roster.map(p => p.id));
 

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Plus, Trash2, Check, X, Pencil, RefreshCw, Clock, TriangleAlert,
-  FileSpreadsheet, FileText, Printer, ArrowUp, ArrowDown, Wand2,
+  FileSpreadsheet, FileText, FileSignature, Printer, ArrowUp, ArrowDown, Wand2,
   Save, LayoutTemplate, Users, MonitorDown, Columns3,
 } from "lucide-react";
 import {
@@ -11,7 +11,7 @@ import {
   dayName, isWeekendDay, isWeeklyRestDay, requiredDailyHours, fmtDate,
   personnelInDepartment, isNightRange, formatDutyColumn, normalizeTemplateColumns,
 } from "@/lib/shared";
-import { STAFF_GROUP_META, type StaffGroup } from "@/lib/shared";
+import { staffGroupMeta, defaultServiceName, type StaffGroup } from "@/lib/shared";
 import { getShiftRangeMetrics, parseShiftRange } from "@/lib/puantaj-engine";
 import { getDutyWarningSummary, warningText, isWarningFor } from "@/lib/roster-conflicts";
 import { Btn, Spinner, Modal, Field, TextInput, Badge, cx } from "@/components/ui-kit";
@@ -19,6 +19,7 @@ import PrintArea, { openPrintPreview } from "@/components/PrintArea";
 import PrintOptionsModal from "@/components/PrintOptionsModal";
 import { downloadPanelPreview } from "@/lib/download-preview";
 import { downloadFromApi } from "@/lib/download";
+import { SignatureModal } from "@/components/modals";
 
 type ApprovedLeave = Pick<LeaveRequest, "personnelId" | "startDate" | "endDate" | "leaveType">;
 
@@ -37,13 +38,16 @@ function isSunday(year: number, month: number, day: number) {
 }
 
 export default function NobetPage({
-  departments, personnel, holidays, selectedDept, year, month, staffGroup = "SAGLIK",
+  departments, personnel, holidays, selectedDept, year, month, staffGroup = "SAGLIK", onDepartmentUpdated,
 }: {
   departments: Department[]; personnel: Personnel[]; holidays: Holiday[];
   selectedDept: string; year: number; month: number;
   /** Hemşire/Sağlık veya Temizlik/Destek — her grubun ayrı çizelgesi vardır */
   staffGroup?: StaffGroup;
+  /** İmza alanları kaydedilince üst bileşendeki servis listesini güncellemek için. */
+  onDepartmentUpdated?: (d: Department) => void;
 }) {
+  const [showSig, setShowSig] = useState(false);
   const [columns, setColumns] = useState<DutyColumn[]>([]);
   const [schedules, setSchedules] = useState<ShiftSchedule[]>([]);
   const [approvedLeaves, setApprovedLeaves] = useState<ApprovedLeave[]>([]);
@@ -106,7 +110,7 @@ export default function NobetPage({
     } finally { setLoading(false); }
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (selectedDept) { setNewService(staffGroup === "DESTEK" ? "Temizlik" : (departments.find(d => d.id === selectedDept)?.name ?? "")); load(); } }, [selectedDept, year, month, personnel, staffGroup]);
+  useEffect(() => { if (selectedDept) { setNewService(defaultServiceName(staffGroup, departments.find(d => d.id === selectedDept)?.name ?? "")); load(); } }, [selectedDept, year, month, personnel, staffGroup]);
 
   function leaveOn(personnelId: string, date: string) {
     return approvedLeaves.find(l => l.personnelId === personnelId && date >= l.startDate && date <= l.endDate);
@@ -333,7 +337,7 @@ export default function NobetPage({
         <div className="flex items-center gap-2 text-white font-bold text-sm" style={{ fontFamily: "var(--font-grotesk)" }}>
           <Clock className="w-4 h-4 text-sky-400" /> Nöbet Çizelgesi
         </div>
-        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${STAFF_GROUP_META[staffGroup].badge}`}>{STAFF_GROUP_META[staffGroup].label}</span>
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${staffGroupMeta(staffGroup).badge}`}>{staffGroupMeta(staffGroup).label}</span>
         <span className="text-white/35 text-xs">{deptName} · {MONTHS[month]} {year}</span>
         <div className="flex-1" />
         <Btn small onClick={() => jumpTo("cols")} title="Nöbet sütunlarını yönet (ekle / düzenle / sırala / sil)">
@@ -346,6 +350,7 @@ export default function NobetPage({
         <Btn small variant="primary" onClick={runDraft} disabled={busy}><Wand2 className="w-3.5 h-3.5" /> Taslak Oluştur</Btn>
         <Btn small variant="success" onClick={() => exportRoster("xlsx")}><FileSpreadsheet className="w-3.5 h-3.5" /> Excel</Btn>
         <Btn small onClick={() => exportRoster("csv")}><FileText className="w-3.5 h-3.5" /> CSV</Btn>
+        <Btn small onClick={() => setShowSig(true)}><FileSignature className="w-3.5 h-3.5" /> İmza Alanları</Btn>
         <Btn small variant="amber" onClick={() => setShowPrintModal(true)}><Printer className="w-3.5 h-3.5" /> Yazdır / PDF</Btn>
         <Btn small onClick={() => downloadPanelPreview()} title="Bu ekranın statik kopyasını index.html olarak indir (paylaşım için)"><MonitorDown className="w-3.5 h-3.5" /> Arayüzü İndir (.html)</Btn>
       </div>
@@ -635,7 +640,7 @@ export default function NobetPage({
       {/* Yazdırma */}
       <PrintArea>
         <div className="print-title">
-          <h1>{MONTHS[month].toLocaleUpperCase("tr")} {year} {STAFF_GROUP_META[staffGroup].print} NÖBET LİSTESİ</h1>
+          <h1>{MONTHS[month].toLocaleUpperCase("tr")} {year} {staffGroupMeta(staffGroup).print} NÖBET LİSTESİ</h1>
           <p>{deptName} · Nöbet planı ve günlük personel dağılımı</p>
         </div>
 
@@ -745,6 +750,14 @@ export default function NobetPage({
           </>
         )}
       </PrintArea>
+
+      {showSig && dept && (
+        <SignatureModal
+          department={dept}
+          onSaved={d => onDepartmentUpdated?.(d)}
+          onClose={() => setShowSig(false)}
+        />
+      )}
 
       {/* Yazdırma öncesi seçim + dipnot */}
       {showPrintModal && (

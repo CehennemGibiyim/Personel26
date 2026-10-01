@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { UserPlus, Check, Users, Pencil, Power, FileSignature } from "lucide-react";
 import { Modal, Btn, Field, TextInput, cx } from "@/components/ui-kit";
 import type { Department, Personnel, PersonnelType, StaffGroup } from "@/lib/shared";
-import { STAFF_GROUP_META, STAFF_GROUP_ORDER, suggestedGroupForTitle } from "@/lib/shared";
+import { staffGroupMeta, listStaffGroups, suggestedGroupForTitle } from "@/lib/shared";
 import { personnelInDepartment, PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, TITLE_SUGGESTIONS, cyclePersonnelType } from "@/lib/shared";
 
 async function api(path: string, method: string, body: unknown) {
@@ -89,16 +89,16 @@ export function AddPersonnelModal({ departments, defaultDeptId, defaultGroup = "
         </Field>
         <Field label="Personel Grubu *" hint="Her grubun ayrı nöbet çizelgesi ve ayrı puantajı vardır.">
           <div className="grid grid-cols-2 gap-2">
-            {STAFF_GROUP_ORDER.map(g => (
+            {listStaffGroups().map(g => (
               <button
                 key={g} type="button" onClick={() => { setGroup(g); setGroupTouched(true); }}
                 className={cx(
                   "py-2.5 rounded-xl border text-xs font-medium transition",
-                  group === g ? STAFF_GROUP_META[g].tab : "bg-white/5 border-white/15 text-white/50 hover:border-white/30"
+                  group === g ? staffGroupMeta(g).tab : "bg-white/5 border-white/15 text-white/50 hover:border-white/30"
                 )}
               >
-                <div className="text-xs font-bold mb-0.5">{STAFF_GROUP_META[g].short}</div>
-                <div className="text-[10px] opacity-70">{STAFF_GROUP_META[g].desc}</div>
+                <div className="text-xs font-bold mb-0.5">{staffGroupMeta(g).short}</div>
+                <div className="text-[10px] opacity-70">{staffGroupMeta(g).desc}</div>
               </button>
             ))}
           </div>

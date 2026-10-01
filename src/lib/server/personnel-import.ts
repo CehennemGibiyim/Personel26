@@ -43,7 +43,7 @@ export function previewImport(input: ImportInput, departments: { id: string; nam
   const seenTc = new Set<string>();
   const seenNames = new Set<string>();
   const typeMap: Record<string, string> = { isci: "ISCI", memur: "MEMUR", hemsire: "HEMSIRE" };
-  const groupMap: Record<string, string> = { saglik: "SAGLIK", hemsire: "SAGLIK", "hemsire saglik": "SAGLIK", destek: "DESTEK", temizlik: "DESTEK", "temizlik destek": "DESTEK" };
+  const groupMap: Record<string, string> = { saglik: "SAGLIK", hemsire: "SAGLIK", "hemsire saglik": "SAGLIK", destek: "DESTEK", temizlik: "DESTEK", "temizlik destek": "DESTEK", teknisyen: "TEKNISYEN", "teknisyen personeli": "TEKNISYEN" };
   const rows: ImportPreviewRow[] = input.rows.map((cells, index) => {
     const get = (key: ImportField) => input.mapping[key] === undefined ? "" : cells[input.mapping[key]!] ?? "";
     const errors: string[] = [], warnings: string[] = [];
