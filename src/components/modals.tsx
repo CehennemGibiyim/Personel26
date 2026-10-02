@@ -1,9 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
-import { UserPlus, Check, Users, Pencil, Power, FileSignature } from "lucide-react";
+import { UserPlus, Check, Users, Pencil, Power, FileSignature, Plus } from "lucide-react";
 import { Modal, Btn, Field, TextInput, cx } from "@/components/ui-kit";
 import type { Department, Personnel, PersonnelType, StaffGroup } from "@/lib/shared";
-import { staffGroupMeta, listStaffGroups, suggestedGroupForTitle } from "@/lib/shared";
+import { staffGroupMeta, listStaffGroups, suggestedGroupForTitle, makeCustomGroup, cleanCustomLabel } from "@/lib/shared";
 import { personnelInDepartment, PERSONNEL_TYPE_META, PERSONNEL_TYPE_ORDER, TITLE_SUGGESTIONS, cyclePersonnelType } from "@/lib/shared";
 
 async function api(path: string, method: string, body: unknown) {
@@ -271,6 +271,61 @@ export function SignatureModal({ department, onSaved, onClose }: {
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>İptal</Btn>
           <Btn variant="primary" onClick={save} disabled={saving}><Check className="w-4 h-4" /> Kaydet</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+
+const GROUP_SUGGESTIONS = ["Anestezi Teknikerleri", "Laboratuvar", "Güvenlik", "Radyoloji", "Hasta Karşılama", "Sekreter"];
+
+/** "+ Özel" düğmesiyle açılan küçük panel: elle yeni nöbet grubu ekler. */
+export function CustomGroupModal({ existing, onAdd, onClose }: {
+  existing: StaffGroup[]; onAdd: (id: StaffGroup) => void; onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [err, setErr] = useState("");
+  function submit() {
+    const id = makeCustomGroup(name);
+    if (!id) { setErr("Grup adı en az 2 karakter olmalıdır."); return; }
+    onAdd(id);
+    onClose();
+  }
+  const preview = cleanCustomLabel(name);
+  const dup = existing.some(g => staffGroupMeta(g).label.toLocaleLowerCase("tr") === preview.toLocaleLowerCase("tr"));
+  return (
+    <Modal title={<><Plus className="w-4 h-4 text-rose-400" /> Özel Nöbet Grubu Ekle</>} onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Grup adı">
+          <TextInput
+            value={name}
+            autoFocus
+            maxLength={30}
+            placeholder="örn. Anestezi Teknikerleri"
+            onChange={e => { setName(e.target.value); setErr(""); }}
+            onKeyDown={e => e.key === "Enter" && submit()}
+          />
+        </Field>
+        <div>
+          <div className="text-white/40 text-[10px] font-bold uppercase tracking-wider mb-1.5">Hızlı seçim</div>
+          <div className="flex flex-wrap gap-1.5">
+            {GROUP_SUGGESTIONS.map(t => (
+              <button key={t} type="button" onClick={() => { setName(t); setErr(""); }}
+                className="px-2.5 py-1 rounded-lg border border-white/10 bg-white/[.04] text-white/60 hover:text-white hover:border-white/30 text-[11px] font-semibold transition cursor-pointer">
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        {dup && <p className="text-amber-300/90 text-[11px]">Bu adla bir grup zaten var; ekleyince o gruba geçilir.</p>}
+        {err && <p className="text-rose-300 text-[11px]" role="alert">{err}</p>}
+        <p className="text-white/35 text-[11px] leading-relaxed">
+          Grup, sekmelerin yanında kendi nöbet çizelgesi ve puantajıyla açılır. Personeli Personel Yönetimi'nden bu gruba atarsınız.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Btn onClick={onClose}>İptal</Btn>
+          <Btn variant="primary" onClick={submit}><Check className="w-4 h-4" /> Ekle</Btn>
         </div>
       </div>
     </Modal>

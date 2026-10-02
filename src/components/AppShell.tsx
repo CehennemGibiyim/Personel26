@@ -7,6 +7,7 @@ import {
 import type { Department, Personnel, Holiday, ShiftTemplate, StaffGroup } from "@/lib/shared";
 import { staffGroupMeta, staffGroupOf, personnelInDepartment, listStaffGroups, setExtraGroups, makeCustomGroup, isCustomGroup, parseStaffGroup } from "@/lib/shared";
 import { MonthNav, Btn, Modal, Field, TextInput, cx } from "@/components/ui-kit";
+import { CustomGroupModal } from "@/components/modals";
 import { downloadPanelPreview } from "@/lib/download-preview";
 import PuantajPage from "@/components/PuantajPage";
 import NobetPage from "@/components/NobetPage";
@@ -150,11 +151,8 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const groupCount = (g: StaffGroup) =>
     personnel.filter(p => p.isActive && staffGroupOf(p) === g && personnelInDepartment(p, selectedDept)).length;
   const showGroup = GROUP_PAGES.includes(page);
-  function addCustomGroup() {
-    const name = window.prompt("Yeni nöbet grubunun adı (örn. Anestezi Teknikerleri, Laboratuvar, Güvenlik):");
-    if (name === null) return;
-    const id = makeCustomGroup(name);
-    if (!id) { window.alert("Grup adı en az 2 karakter olmalıdır."); return; }
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  function addCustomGroup(id: StaffGroup) {
     if (!allGroups.includes(id)) saveCustomGroups([...customGroups, id]);
     setStaffGroup(id);
   }
@@ -192,7 +190,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
           </span>
         );
       })}
-      <button type="button" onClick={addCustomGroup} title="Elle yeni nöbet grubu ekle" className="px-2 py-1.5 rounded-lg border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0">
+      <button type="button" onClick={() => setShowAddGroup(true)} title="Elle yeni nöbet grubu ekle" className="px-2 py-1.5 rounded-lg border border-dashed border-white/20 text-white/50 hover:text-white hover:border-white/40 text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0">
         <Plus className="w-3.5 h-3.5 inline -mt-0.5" /> Özel
       </button>
     </div>
@@ -438,6 +436,9 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
           {page === "ayarlar" && <SettingsPage departments={departments} onPersonnelChanged={loadBootstrap} onOpenPersonnel={() => navigate("personel")} />}
         </div>
       </main>
+      {showAddGroup && (
+        <CustomGroupModal existing={allGroups} onAdd={addCustomGroup} onClose={() => setShowAddGroup(false)} />
+      )}
 
       {showDeptModal && (
         <DeptManageModal
