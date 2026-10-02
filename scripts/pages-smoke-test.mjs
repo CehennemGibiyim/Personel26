@@ -189,6 +189,24 @@ const { data: badGroup } = await json("/api/personnel", post({ name: "GRUP TEST�
 check("Geçersiz (çok kısa) özel grup SAĞLIK'a düşer", badGroup.personnel?.staffGroup === "SAGLIK", String(badGroup.personnel?.staffGroup));
 if (badGroup.personnel?.id) await json("/api/personnel", { ...post({ id: badGroup.personnel.id, hard: true }), method: "DELETE" });
 
+// Boş özel gruplar veritabanında saklanır ve yedeğe girer
+const { res: cgPut, data: cgData } = await json("/api/custom-groups", { ...post({ groups: ["OZEL:Güvenlik", "OZEL:x", "SAGLIK", "OZEL:Güvenlik"] }), method: "PUT" });
+check("Özel gruplar kaydedilir (geçersiz/yinelenenler ayıklanır)", cgPut.status === 200 && JSON.stringify(cgData.groups) === JSON.stringify(["OZEL:Güvenlik"]), JSON.stringify(cgData));
+const { data: cgGet } = await json("/api/custom-groups");
+check("Özel gruplar geri okunur", JSON.stringify(cgGet.groups) === JSON.stringify(["OZEL:Güvenlik"]), JSON.stringify(cgGet));
+const { res: setRes, data: setData } = await json("/api/settings");
+const { res: setPut } = await json("/api/settings", { ...post({ ...setData.settings, customGroups: [] }), method: "PUT" });
+const { data: cgAfter } = await json("/api/custom-groups");
+check("Ayar kaydı özel grupları silmez", setPut.status === 200 && cgAfter.groups?.length === 1, `ayar durumu ${setPut.status} ${JSON.stringify(cgAfter)}`);
+const { res: bkRes, data: bk } = await json("/api/backup", post({}));
+check("Yedek alındı (boş özel grup dahil)", bkRes.status === 200 && Boolean(bk.id), JSON.stringify(bk).slice(0, 100));
+const { data: bkData } = await json(`/api/backup/${bk.id}`);
+const settingsRow = (bkData.app_settings ?? []).find(r => r.id === "global");
+check("Yedekte özel gruplar var", JSON.stringify(settingsRow?.data?.customGroups) === JSON.stringify(["OZEL:Güvenlik"]), JSON.stringify(settingsRow?.data?.customGroups));
+const { res: pvRes } = await json("/api/database", post({ action: "preview", data: bkData }));
+check("Yedek geri yükleme önizlemesi geçerli", pvRes.status === 200, `durum ${pvRes.status}`);
+await json("/api/custom-groups", { ...post({ groups: [] }), method: "PUT" });
+
 const { res: leavesRes, data: leaves } = await json(`/api/leaves?personnel=${personId}`);
 check("GET /api/leaves 200", leavesRes.status === 200, `durum ${leavesRes.status}`);
 check("İzin kayıtları listelendi", Array.isArray(leaves.leaves));

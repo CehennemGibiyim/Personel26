@@ -56,4 +56,18 @@ export async function downloadFromApi(url: string, fallbackName: string): Promis
   const blob = await res.blob();
   if (!blob.size) throw new Error("Boş dosya alındı");
   saveBlob(blob, filenameFromResponse(res, fallbackName));
+  // Yedek (JSON/SQL) indirmelerinin zamanı, "son indirilen yedek" uyarısı için hatırlanır.
+  if (url.startsWith("/api/backup/") || (url.startsWith("/api/database") && !url.includes("format=schema"))) markBackupDownloaded();
+}
+
+export const LAST_BACKUP_DOWNLOAD_KEY = "p26-last-backup-download";
+export function markBackupDownloaded(): void {
+  try { localStorage.setItem(LAST_BACKUP_DOWNLOAD_KEY, new Date().toISOString()); } catch { /* gizli sekme */ }
+}
+export function lastBackupDownload(): Date | null {
+  try {
+    const v = localStorage.getItem(LAST_BACKUP_DOWNLOAD_KEY);
+    const d = v ? new Date(v) : null;
+    return d && Number.isFinite(d.getTime()) ? d : null;
+  } catch { return null; }
 }

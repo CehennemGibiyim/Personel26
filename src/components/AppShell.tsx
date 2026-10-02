@@ -66,17 +66,36 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const [month, setMonth] = useState(() => initialData?.today?.month ?? new Date().getMonth());
   const [page, setPage] = useState<PageKey>("ayarlar");
   const [staffGroup, setStaffGroup] = useState<StaffGroup>("SAGLIK");
-  // Elle eklenen nöbet grupları: personeli olmayanlar bu tarayıcıda saklanır.
+  // Elle eklenen nöbet grupları veritabanında (ayarlar tablosu) saklanır; böylece yedeğe girer.
   const [customGroups, setCustomGroups] = useState<StaffGroup[]>([]);
   useEffect(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem("p26-custom-groups") || "[]");
-      if (Array.isArray(raw)) setCustomGroups(raw.map(parseStaffGroup).filter(isCustomGroup));
-    } catch {}
+    (async () => {
+      try {
+        const res = await fetch("/api/custom-groups", { cache: "no-store" });
+        const data = await res.json();
+        let list: StaffGroup[] = Array.isArray(data.groups) ? data.groups : [];
+        // Eski sürümde yalnız tarayıcıda tutulan gruplar varsa veritabanına taşı.
+        let legacy: StaffGroup[] = [];
+        try {
+          const raw = JSON.parse(localStorage.getItem("p26-custom-groups") || "[]");
+          if (Array.isArray(raw)) legacy = raw.map(parseStaffGroup).filter(isCustomGroup);
+        } catch {}
+        const missing = legacy.filter(g => !list.includes(g));
+        if (missing.length) {
+          list = [...list, ...missing];
+          const put = await fetch("/api/custom-groups", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groups: list }) });
+          if (!put.ok) { setCustomGroups(list); return; }
+        }
+        try { localStorage.removeItem("p26-custom-groups"); } catch {}
+        setCustomGroups(list);
+      } catch {}
+    })();
   }, []);
-  function saveCustomGroups(list: StaffGroup[]) {
+  async function saveCustomGroups(list: StaffGroup[]) {
     setCustomGroups(list);
-    try { localStorage.setItem("p26-custom-groups", JSON.stringify(list)); } catch {}
+    try {
+      await fetch("/api/custom-groups", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groups: list }) });
+    } catch {}
   }
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDeptModal, setShowDeptModal] = useState<false | "add" | "edit">(false);

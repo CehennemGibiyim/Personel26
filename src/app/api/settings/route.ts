@@ -22,6 +22,8 @@ export async function PUT(request: Request) {
   try {
     requireSameOrigin(request);
     const settings = validateSettings(await request.json());
+    // Özel nöbet grupları ayrı uç noktadan yönetilir; eski bir ekranın kaydı onları silmesin.
+    settings.customGroups = (await getSettings()).customGroups ?? [];
     await db.transaction(async tx => {
       await tx.insert(appSettings).values({ id: "global", data: settings, updatedAt: new Date() }).onConflictDoUpdate({ target: appSettings.id, set: { data: settings, updatedAt: new Date() } });
       await tx.insert(activityLogs).values({ action: "SETTINGS", description: "Kurum bilgileri ve panel tercihleri güncellendi." });

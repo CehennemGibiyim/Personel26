@@ -1,15 +1,19 @@
 import { THEMES } from "@/lib/themes";
+import { parseStaffGroup, isCustomGroup } from "@/lib/shared";
 export type AppSettings = {
   institution: string; shortName: string; email: string; phone: string; address: string; logo: string | null;
   theme: string; compact: boolean; reducedMotion: boolean; maskTc: boolean;
   autoBackup: boolean; backupRetention: number;
   notifyImports: boolean; notifySystem: boolean; notifyBackups: boolean;
+  /** Elle eklenen nöbet grupları ("OZEL:<ad>"); personeli olmayanlar da yedeğe girsin diye veritabanında saklanır. */
+  customGroups: string[];
 };
 export const DEFAULT_SETTINGS: AppSettings = {
   institution: "Personel26 Sağlık Kurumu", shortName: "Personel26", email: "", phone: "", address: "", logo: null,
   theme: "original", compact: false, reducedMotion: false, maskTc: true,
   autoBackup: true, backupRetention: 30,
   notifyImports: true, notifySystem: true, notifyBackups: true,
+  customGroups: [],
 };
 export function validateSettings(input: unknown): AppSettings {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Geçersiz ayar verisi.");
@@ -34,7 +38,19 @@ export function validateSettings(input: unknown): AppSettings {
   const retention = Number(value.backupRetention);
   if (!Number.isInteger(retention) || retention < 5 || retention > 365) throw new Error("Yedek saklama adedi 5–365 arasında olmalıdır.");
   result.backupRetention = retention;
+  result.customGroups = cleanCustomGroups(value.customGroups);
   return result;
+}
+/** Geçersiz/yinelenen kayıtları ayıklar; en çok 50 özel grup. */
+export function cleanCustomGroups(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const out: string[] = [];
+  for (const item of input) {
+    const g = parseStaffGroup(item);
+    if (isCustomGroup(g) && !out.includes(g)) out.push(g);
+    if (out.length >= 50) break;
+  }
+  return out;
 }
 export function publishSettings(settings: AppSettings) {
   if (typeof window === "undefined") return;

@@ -34,6 +34,7 @@ export const API_ROUTES: ApiRoute[] = [
   { path: "/api/export/nobet", load: () => import("@/app/api/export/nobet/route") },
   { path: "/api/export/personel", load: () => import("@/app/api/export/personel/route") },
   { path: "/api/export/puantaj", load: () => import("@/app/api/export/puantaj/route") },
+  { path: "/api/custom-groups", load: () => import("@/app/api/custom-groups/route") },
   { path: "/api/health", load: () => import("@/app/api/health/route") },
   { path: "/api/leaves", load: () => import("@/app/api/leaves/route") },
   { path: "/api/overrides", load: () => import("@/app/api/overrides/route") },

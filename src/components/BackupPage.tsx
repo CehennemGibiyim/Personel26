@@ -2,15 +2,26 @@
 import { useEffect, useState } from "react";
 import {
   HardDriveDownload, RefreshCw, Download, RotateCcw, DatabaseBackup, CheckCircle2,
-  AlertTriangle, FileJson,
+  AlertTriangle, FileJson, ShieldCheck,
 } from "lucide-react";
 import { Btn, Spinner, EmptyState, Badge, cx } from "@/components/ui-kit";
-import { downloadFromApi } from "@/lib/download";
+import { downloadFromApi, lastBackupDownload } from "@/lib/download";
 
 
 type BackupRow = {
   id: string; filename: string; kind: string; recordCounts: Record<string, number> | null; createdAt: string;
 };
+
+/** Yedeğe giren veriler (tablo anahtarı → görünen ad). */
+const BACKUP_CONTENT: [string, string][] = [
+  ["personnel", "Personel"], ["departments", "Servisler ve imza alanları"], ["personnel_departments", "Personel–servis atamaları"],
+  ["shift_schedules", "Nöbet çizelgeleri"], ["duty_columns", "Nöbet sütunları"], ["timesheet_entries", "Puantaj kayıtları"],
+  ["leave_requests", "İzinler"], ["shift_swap_requests", "Değişim talepleri"], ["shift_templates", "Vardiya şablonları"],
+  ["weekly_overrides", "Haftalık düzenlemeler"], ["holidays", "Tatiller"], ["announcements", "Duyurular"],
+  ["app_settings", "Ayarlar ve özel nöbet grupları"], ["activity_logs", "İşlem günlüğü"],
+];
+/** Bu kadar günden uzun süredir yedek indirilmediyse hatırlatılır. */
+const REMIND_AFTER_DAYS = 7;
 
 const KIND_LABEL: Record<string, { label: string; cls: string }> = {
   AUTO: { label: "Otomatik", cls: "bg-sky-500/15 text-sky-300 border-sky-500/40" },
@@ -24,6 +35,8 @@ export default function BackupPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [lastDl, setLastDl] = useState<Date | null>(null);
+  useEffect(() => { setLastDl(lastBackupDownload()); }, []);
 
   async function load() {
     setLoading(true);
@@ -50,6 +63,7 @@ export default function BackupPage() {
     // Sunucusuz (GitHub Pages) sürümde de çalışması için fetch + blob kullanılır.
     try {
       await downloadFromApi(`/api/backup/${b.id}`, b.filename);
+      setLastDl(lastBackupDownload());
     } catch (e) {
       setErr(e instanceof Error ? e.message : "İndirme başarısız");
     }
@@ -80,6 +94,45 @@ export default function BackupPage() {
           <HardDriveDownload className="w-3.5 h-3.5" /> Şimdi Yedek Al
         </Btn>
       </div>
+
+      {(() => {
+        const days = lastDl ? Math.floor((Date.now() - lastDl.getTime()) / 86400000) : null;
+        const stale = days === null || days >= REMIND_AFTER_DAYS;
+        return (
+          <div className={cx("flex flex-wrap items-start gap-2 rounded-xl border px-4 py-2.5 text-xs", stale ? "bg-amber-500/10 border-amber-500/40 text-amber-100" : "bg-emerald-500/10 border-emerald-500/40 text-emerald-100")}>
+            {stale ? <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> : <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />}
+            <div className="min-w-0 flex-1">
+              <div className="font-bold">
+                Son indirilen yedek: {lastDl ? `${lastDl.toLocaleString("tr-TR")} (${days === 0 ? "bugün" : `${days} gün önce`})` : "henüz hiç indirilmedi"}
+              </div>
+              <div className="opacity-80 mt-0.5">
+                {stale
+                  ? "Uygulama içindeki yedekler veritabanıyla aynı yerde durur. Tarayıcı verisi silinirse veya disk bozulursa birlikte kaybolur. Aşağıdan bir yedeği İndir'le başka bir yere (USB, bulut) kaydedin."
+                  : "Yedeğin bir kopyası bu bilgisayardan dışarı alınmış. Önemli değişikliklerden sonra yenilemeyi unutmayın."}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <details className="panel px-4 py-3 text-xs text-white/70">
+        <summary className="cursor-pointer font-bold text-white/85">Bu yedeğe ne giriyor?</summary>
+        <div className="mt-2.5 grid sm:grid-cols-2 gap-x-6 gap-y-1">
+          {BACKUP_CONTENT.map(([key, label]) => {
+            const n = items[0]?.recordCounts?.[key];
+            return (
+              <div key={key} className="flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>{label}</span>
+                {n !== undefined && <span className="text-white/35 ml-auto">{n.toLocaleString("tr-TR")} kayıt</span>}
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2.5 text-white/40 leading-relaxed">
+          Kayıt sayıları en son yedeğe aittir. Yedeğe girmeyenler: bu tarayıcıya özel görünüm tercihleri (tema, yazdırma dipnotları) ve yedeklerin kendisi.
+        </p>
+      </details>
 
       {msg && <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/40 text-emerald-200 text-xs rounded-xl px-4 py-2.5 anim-slide"><CheckCircle2 className="w-4 h-4" />{msg}</div>}
       {err && <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs rounded-xl px-4 py-2.5 anim-slide"><AlertTriangle className="w-4 h-4" />{err}</div>}
