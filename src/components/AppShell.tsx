@@ -26,18 +26,28 @@ type PageKey =
   | "puantaj" | "nobet" | "sablon" | "izin" | "degisim" | "personel"
   | "analiz" | "uyarilar" | "duyuru" | "yedek" | "ayarlar";
 
-const NAV: { key: PageKey; label: string; icon: React.ReactNode; desc: string }[] = [
-  { key: "puantaj", label: "Puantaj", icon: <ClipboardList className="w-[17px] h-[17px]" />, desc: "Aylık çalışma cetveli" },
-  { key: "nobet", label: "Nöbet Çizelgesi", icon: <CalendarClock className="w-[17px] h-[17px]" />, desc: "Vardiya atamaları" },
-  { key: "sablon", label: "Vardiya Şablonları", icon: <LayoutTemplate className="w-[17px] h-[17px]" />, desc: "2'li / 3'lü düzenler" },
-  { key: "izin", label: "İzin Yönetimi", icon: <CalendarDays className="w-[17px] h-[17px]" />, desc: "Talepler ve onay akışı" },
-  { key: "degisim", label: "Değişim Talepleri", icon: <Repeat className="w-[17px] h-[17px]" />, desc: "Nöbet takası" },
-  { key: "personel", label: "Personel Yönetimi", icon: <Users className="w-[17px] h-[17px]" />, desc: "Ekle, düzenle, departman ata" },
-  { key: "analiz", label: "Adalet Analizi", icon: <Scale className="w-[17px] h-[17px]" />, desc: "Nöbet dağılımı" },
-  { key: "uyarilar", label: "Mevzuat Uyarıları", icon: <ShieldAlert className="w-[17px] h-[17px]" />, desc: "Dinlenme ve limitler" },
-  { key: "duyuru", label: "Duyurular", icon: <Megaphone className="w-[17px] h-[17px]" />, desc: "Servis bildirimleri" },
-  { key: "yedek", label: "Yedekleme", icon: <DatabaseBackup className="w-[17px] h-[17px]" />, desc: "Veri güvenliği" },
-  { key: "ayarlar", label: "Ayarlar", icon: <Settings2 className="w-[17px] h-[17px]" />, desc: "Kurum, görünüm ve sistem" },
+/** Renkli, yuvarlatılmış simge kutusu (logodaki gibi gradyanlı zemin üzerinde beyaz simge). */
+function NavIcon({ grad, size = "md", active = true, children }: { grad: string; size?: "sm" | "md" | "lg"; active?: boolean; children: React.ReactNode }) {
+  const box = size === "lg" ? "w-9 h-9 rounded-xl" : size === "sm" ? "w-6 h-6 rounded-lg" : "w-8 h-8 rounded-[10px]";
+  return (
+    <span className={cx("inline-flex items-center justify-center shrink-0 bg-gradient-to-br text-white shadow-md transition", box, grad, active ? "shadow-black/40 ring-1 ring-white/20" : "opacity-80 group-hover:opacity-100 shadow-black/30")}>
+      {children}
+    </span>
+  );
+}
+
+const NAV: { key: PageKey; label: string; icon: React.ReactNode; desc: string; grad: string }[] = [
+  { key: "puantaj", label: "Puantaj", icon: <ClipboardList className="w-[17px] h-[17px]" />, desc: "Aylık çalışma cetveli", grad: "from-sky-500 to-blue-600" },
+  { key: "nobet", label: "Nöbet Çizelgesi", icon: <CalendarClock className="w-[17px] h-[17px]" />, desc: "Vardiya atamaları", grad: "from-violet-500 to-purple-600" },
+  { key: "sablon", label: "Vardiya Şablonları", icon: <LayoutTemplate className="w-[17px] h-[17px]" />, desc: "2'li / 3'lü düzenler", grad: "from-fuchsia-500 to-pink-600" },
+  { key: "izin", label: "İzin Yönetimi", icon: <CalendarDays className="w-[17px] h-[17px]" />, desc: "Talepler ve onay akışı", grad: "from-emerald-500 to-teal-600" },
+  { key: "degisim", label: "Değişim Talepleri", icon: <Repeat className="w-[17px] h-[17px]" />, desc: "Nöbet takası", grad: "from-orange-500 to-amber-600" },
+  { key: "personel", label: "Personel Yönetimi", icon: <Users className="w-[17px] h-[17px]" />, desc: "Ekle, düzenle, departman ata", grad: "from-cyan-500 to-sky-600" },
+  { key: "analiz", label: "Adalet Analizi", icon: <Scale className="w-[17px] h-[17px]" />, desc: "Nöbet dağılımı", grad: "from-yellow-500 to-orange-500" },
+  { key: "uyarilar", label: "Mevzuat Uyarıları", icon: <ShieldAlert className="w-[17px] h-[17px]" />, desc: "Dinlenme ve limitler", grad: "from-rose-500 to-red-600" },
+  { key: "duyuru", label: "Duyurular", icon: <Megaphone className="w-[17px] h-[17px]" />, desc: "Servis bildirimleri", grad: "from-pink-500 to-rose-600" },
+  { key: "yedek", label: "Yedekleme", icon: <DatabaseBackup className="w-[17px] h-[17px]" />, desc: "Veri güvenliği", grad: "from-indigo-500 to-blue-700" },
+  { key: "ayarlar", label: "Ayarlar", icon: <Settings2 className="w-[17px] h-[17px]" />, desc: "Kurum, görünüm ve sistem", grad: "from-slate-500 to-slate-700" },
 ];
 
 const MONTH_PAGES: PageKey[] = ["puantaj", "nobet", "sablon", "izin", "degisim", "analiz", "uyarilar"];
@@ -221,6 +231,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
       {/* Mobil üst çubuk */}
       <div className="lg:hidden flex items-center gap-2 px-3 py-2.5 border-b border-white/10 bg-[#0a1020]/95 backdrop-blur sticky top-0 z-40">
         <button aria-label="Menüyü aç" onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition"><Menu className="w-4 h-4" /></button>
+        <NavIcon grad={navItem.grad} size="sm">{navItem.icon}</NavIcon>
         <div className="text-white font-bold text-xs">{navItem.label}</div>
         <div className="flex-1" />
         {MONTH_PAGES.includes(page) && (
@@ -263,7 +274,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
                   : "text-white/55 hover:text-white hover:bg-white/[.05] border border-transparent"
               )}
             >
-              <span className={cx("pointer-events-none", page === n.key ? "text-sky-400" : "text-white/35 group-hover:text-white/70")}>{n.icon}</span>
+              <span className="pointer-events-none"><NavIcon grad={n.grad} active={page === n.key}>{n.icon}</NavIcon></span>
               <span className="flex-1 min-w-0 pointer-events-none">
                 <span className="block text-xs font-bold leading-tight">{n.label}</span>
                 <span className="block text-[10px] opacity-60 truncate">{n.desc}</span>
@@ -358,9 +369,12 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
 
           {/* 2. satır — Sayfa başlığı (sol) · Ekip sekmeleri + Ay seçici (sağ) */}
           <div className="flex items-center gap-3 px-6 py-3 flex-wrap">
-            <div className="min-w-0 mr-auto">
-              <h1 className="text-white font-black text-base leading-tight truncate" style={{ fontFamily: "var(--font-grotesk)" }}>{navItem.label}</h1>
-              <p className="text-white/35 text-[11px] truncate">{navItem.desc}{deptName ? ` · ${deptName}` : ""}</p>
+            <div className="min-w-0 mr-auto flex items-center gap-3">
+              <NavIcon grad={navItem.grad} size="lg">{navItem.icon}</NavIcon>
+              <div className="min-w-0">
+                <h1 className="text-white font-black text-base leading-tight truncate" style={{ fontFamily: "var(--font-grotesk)" }}>{navItem.label}</h1>
+                <p className="text-white/35 text-[11px] truncate">{navItem.desc}{deptName ? ` · ${deptName}` : ""}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {showGroup && groupSwitch()}
