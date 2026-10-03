@@ -1,8 +1,8 @@
-import { THEMES } from "@/lib/themes";
+import { THEMES, normalizeCustomThemes, type Theme } from "@/lib/themes";
 import { parseStaffGroup, isCustomGroup } from "@/lib/shared";
 export type AppSettings = {
   institution: string; shortName: string; email: string; phone: string; address: string; logo: string | null;
-  theme: string; compact: boolean; reducedMotion: boolean; maskTc: boolean;
+  theme: string; /** Açıkken tema, işletim sisteminin açık/koyu tercihini izler (yeni kurulumlarda varsayılan). */ themeAuto: boolean; /** Kullanıcının oluşturduğu temalar (en çok 10). */ customThemes: Theme[]; compact: boolean; reducedMotion: boolean; maskTc: boolean;
   autoBackup: boolean; backupRetention: number;
   notifyImports: boolean; notifySystem: boolean; notifyBackups: boolean;
   /** Elle eklenen nöbet grupları ("OZEL:<ad>"); personeli olmayanlar da yedeğe girsin diye veritabanında saklanır. */
@@ -10,7 +10,7 @@ export type AppSettings = {
 };
 export const DEFAULT_SETTINGS: AppSettings = {
   institution: "Personel26 Sağlık Kurumu", shortName: "Personel26", email: "", phone: "", address: "", logo: null,
-  theme: "original", compact: false, reducedMotion: false, maskTc: true,
+  theme: "original", themeAuto: true, customThemes: [], compact: false, reducedMotion: false, maskTc: true,
   autoBackup: true, backupRetention: 30,
   notifyImports: true, notifySystem: true, notifyBackups: true,
   customGroups: [],
@@ -29,8 +29,12 @@ export function validateSettings(input: unknown): AppSettings {
     if (typeof value.logo !== "string" || value.logo.length > 400000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value.logo)) throw new Error("Geçersiz kurum logosu.");
     result.logo = value.logo;
   }
-  if (!THEMES.some(t => t.id === value.theme)) throw new Error("Geçersiz tema seçimi.");
-  result.theme = String(value.theme);
+  result.customThemes = normalizeCustomThemes(value.customThemes);
+  // Bilinmeyen veya silinmiş tema, kaydı reddetmek yerine ana temaya döner (tema koruması).
+  const known = THEMES.some(t => t.id === value.theme) || result.customThemes.some(t => t.id === value.theme);
+  result.theme = known ? String(value.theme) : "original";
+  // Eski kayıtlarda alan yoktur: mevcut kullanıcıların teması kendiliğinden değişmesin.
+  result.themeAuto = typeof value.themeAuto === "boolean" ? value.themeAuto : false;
   for (const key of ["compact", "reducedMotion", "maskTc", "autoBackup", "notifyImports", "notifySystem", "notifyBackups"] as const) {
     if (typeof value[key] !== "boolean") throw new Error("Geçersiz tercih.");
     result[key] = value[key];

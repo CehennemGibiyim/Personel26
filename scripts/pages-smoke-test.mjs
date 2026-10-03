@@ -189,6 +189,29 @@ const { data: badGroup } = await json("/api/personnel", post({ name: "GRUP TEST�
 check("Geçersiz (çok kısa) özel grup SAĞLIK'a düşer", badGroup.personnel?.staffGroup === "SAGLIK", String(badGroup.personnel?.staffGroup));
 if (badGroup.personnel?.id) await json("/api/personnel", { ...post({ id: badGroup.personnel.id, hard: true }), method: "DELETE" });
 
+// Özel tema, otomatik tema ve tema koruması
+{
+  const { data: cur } = await json("/api/settings");
+  const base = cur.settings;
+  const custom = { id: "custom:smoke-1", name: "Duman Testi", bg: "#101820", panel: "#1b2733", sidebar: "#14202b", accent: "#ffb703", text: "#f1f5f9", muted: "#94a3b8" };
+  const bad = { id: "custom:bad-1", name: "Bozuk", bg: "kırmızı", panel: "#1b2733", sidebar: "#14202b", accent: "#ffb703", text: "#f1f5f9", muted: "#94a3b8" };
+  const put = async body => json("/api/settings", { ...post(body), method: "PUT" });
+  const { res: r1, data: d1 } = await put({ ...base, theme: custom.id, themeAuto: false, customThemes: [custom, bad] });
+  check("Özel tema kaydedilir ve seçilir", r1.status === 200 && d1.settings.theme === custom.id && d1.settings.customThemes.length === 1, JSON.stringify(d1).slice(0, 140));
+  check("Bozuk özel tema (geçersiz renk) ayıklanır", !d1.settings?.customThemes?.some(t => t.id === "custom:bad-1"));
+  check("Özel tema kategorisi renkten hesaplanır (koyu)", d1.settings?.customThemes?.[0]?.category === "dark");
+  const { data: d2 } = await put({ ...d1.settings, customThemes: [] });
+  check("Silinen temayı seçili bırakan kayıt ana temaya döner", d2.settings?.theme === "original", String(d2.settings?.theme));
+  const { data: d3 } = await put({ ...base, theme: "olmayan-tema", customThemes: [] });
+  check("Bilinmeyen tema kaydı reddetmez, ana temaya döner", d3.settings?.theme === "original", JSON.stringify(d3).slice(0, 100));
+  const noAuto = { ...base }; delete noAuto.themeAuto;
+  const { data: d4 } = await put({ ...noAuto, theme: "ocean", customThemes: [] });
+  check("Eski kayıtlarda themeAuto yoksa kapalı sayılır (tema kendiliğinden değişmez)", d4.settings?.themeAuto === false && d4.settings?.theme === "ocean", JSON.stringify(d4.settings).slice(0, 120));
+  const { data: d5 } = await put({ ...base, theme: "original", themeAuto: true, customThemes: [] });
+  check("Otomatik tema (sistemi izle) kaydedilir", d5.settings?.themeAuto === true);
+  await put({ ...base, customThemes: [] });
+}
+
 // Boş özel gruplar veritabanında saklanır ve yedeğe girer
 const { res: cgPut, data: cgData } = await json("/api/custom-groups", { ...post({ groups: ["OZEL:Güvenlik", "OZEL:x", "SAGLIK", "OZEL:Güvenlik"] }), method: "PUT" });
 check("Özel gruplar kaydedilir (geçersiz/yinelenenler ayıklanır)", cgPut.status === 200 && JSON.stringify(cgData.groups) === JSON.stringify(["OZEL:Güvenlik"]), JSON.stringify(cgData));

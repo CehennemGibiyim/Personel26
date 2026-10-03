@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Settings2, Building2, Palette, ArrowDownToLine, DatabaseBackup, Bell, MonitorCog, Save, Check, ChevronRight, Search, CircleHelp, X, ArrowUpRight, ShieldCheck, Database, Clock3, LockKeyhole, Upload, Globe2, EyeOff, Rows3, Sparkles, FileSpreadsheet, ChevronDown, Loader2, CheckCircle2, AlertCircle, GitBranch as Github, ExternalLink, Terminal, HardDrive, CircleDot, HeartPulse, RefreshCw, Activity, ChevronLeft, Keyboard, Download, Users } from "lucide-react";
 import type { Department } from "@/lib/shared";
 import { DEFAULT_SETTINGS, publishSettings, type AppSettings } from "@/lib/settings";
-import { THEMES, applyTheme } from "@/lib/themes";
+import { findTheme, effectiveThemeId, applyThemeFromSettings } from "@/lib/themes";
 import { fileToSquareDataUrl } from "@/lib/image-resize";
 import { cx } from "@/components/ui-kit";
 import ThemeSettings from "@/components/ThemeSettings";
@@ -42,14 +42,14 @@ export default function SettingsPage({ departments, onPersonnelChanged, onOpenPe
     window.dispatchEvent(new CustomEvent("p26-dirty", { detail: dirty }));
     return () => { window.dispatchEvent(new CustomEvent("p26-dirty", { detail: false })); };
   }, [dirty]);
-  useEffect(() => () => { const current = savedRef.current; applyTheme(current.theme, current.compact, current.reducedMotion); }, []);
+  useEffect(() => () => { const current = savedRef.current; applyThemeFromSettings(current); }, []);
   const notify = useCallback((message: string, error = false) => { setToast({ message, error }); }, []);
   const load = useCallback(async (replace = false) => {
     try {
       const response = await fetch("/api/settings", { cache: "no-store" });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       setStatus(data.status); setLogs(data.logs ?? []);
-      if (replace) { setSettings(data.settings); setSaved(data.settings); applyTheme(data.settings.theme, data.settings.compact, data.settings.reducedMotion); publishSettings(data.settings); }
+      if (replace) { setSettings(data.settings); setSaved(data.settings); applyThemeFromSettings(data.settings); publishSettings(data.settings); }
     } catch (error) { notify(error instanceof Error ? error.message : "Ayarlar yüklenemedi.", true); }
     finally { setLoading(false); }
   }, [notify]);
@@ -65,18 +65,18 @@ export default function SettingsPage({ departments, onPersonnelChanged, onOpenPe
     try {
       const response = await fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setSettings(data.settings); setSaved(data.settings); setSavedAt(data.savedAt); publishSettings(data.settings); applyTheme(data.settings.theme, data.settings.compact, data.settings.reducedMotion); notify("Değişiklikleriniz başarıyla kaydedildi."); await load();
+      setSettings(data.settings); setSaved(data.settings); setSavedAt(data.savedAt); publishSettings(data.settings); applyThemeFromSettings(data.settings); notify("Değişiklikleriniz başarıyla kaydedildi."); await load();
     } catch (error) { notify(error instanceof Error ? error.message : "Kaydedilemedi.", true); }
     finally { setSaving(false); }
   }
-  function reset() { setSettings({ ...saved }); applyTheme(saved.theme, saved.compact, saved.reducedMotion); notify("Kaydedilmemiş değişiklikler geri alındı."); }
+  function reset() { setSettings({ ...saved }); applyThemeFromSettings(saved); notify("Kaydedilmemiş değişiklikler geri alındı."); }
   async function uploadLogo(file: File) {
     try { if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 5 * 1024 * 1024) throw new Error("5 MB’den küçük PNG, JPG veya WEBP seçin."); const logo = await fileToSquareDataUrl(file); setSettings(prev => ({ ...prev, logo })); }
     catch (error) { notify(error instanceof Error ? error.message : "Logo yüklenemedi.", true); }
     finally { if (logoRef.current) logoRef.current.value = ""; }
   }
   const change = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => setSettings(prev => ({ ...prev, [key]: value }));
-  const activeTheme = THEMES.find(theme => theme.id === saved.theme) ?? THEMES[0];
+  const activeTheme = findTheme(effectiveThemeId(saved));
   const notifications = logs.filter(log => log.action === "IMPORT" ? saved.notifyImports : ["BACKUP", "RESTORE"].includes(log.action) ? saved.notifyBackups : saved.notifySystem);
   const backupDate = status?.lastBackup ? new Date(status.lastBackup.createdAt) : null;
   return <div className="settings-root">
@@ -93,7 +93,7 @@ export default function SettingsPage({ departments, onPersonnelChanged, onOpenPe
       <aside className="general-side"><section className="settings-card quick-actions-card"><div className="section-heading"><span className="quick-spark"><Sparkles size={18} /></span><div><h2>Hızlı işlemler</h2><p>En çok ihtiyaç duyduklarınız.</p></div></div>{[{ icon: FileSpreadsheet, color: "green", title: "Excel’den personel aktar", desc: "Kontrol et, eşleştir ve toplu yükle", target: "import" as Tab }, { icon: DatabaseBackup, color: "blue", title: "Yedekleme merkezi", desc: "Verilerinizi güvene alın", target: "backup" as Tab }, { icon: Palette, color: "violet", title: "Yeni bir tema keşfet", desc: "20 alternatif, aynı çalışma alanı", target: "appearance" as Tab }].map(action => <button className="quick-action" key={action.target} onClick={() => setTab(action.target)}><span className={cx("settings-icon", action.color)}><action.icon size={18} /></span><span><b>{action.title}</b><small>{action.desc}</small></span><ChevronRight size={15} /></button>)}</section>
       <section className="protected-theme-card"><div className="protected-theme-top"><span><LockKeyhole size={11} /> ANA TEMA</span><ShieldCheck size={20} /></div><div className="protected-illustration"><div className="protected-window"><div><i /><i /><i /></div><span /><section><i /><i /><i /><i /></section></div><span className="illustration-shield"><ShieldCheck size={25} /></span><div className="illustration-orbit" /></div><h3>Tanıdık görünüm.<br />Güvende kalan bir tema.</h3><p>Ana temanızın renkleri ve tasarımı korunur. Yeni temalar yalnızca sizin seçiminizle etkinleşir.</p><button onClick={() => setTab("appearance")}>Temaları keşfet <ArrowRightIcon /></button></section>
       <section className="settings-card system-summary"><div><span className={cx("status-dot", status?.connected && "online")} /><b>{status?.connected ? "Her şey kontrol altında" : "Bağlantı kontrol ediliyor"}</b></div><p>Verileriniz PostgreSQL üzerinde saklanır. Ayarlar tüm çalışma alanında geçerlidir.</p><button className="settings-text-link" onClick={() => setTab("system")}>Sistem ayrıntıları <ArrowUpRight size={14} /></button></section></aside></div>}
-      {tab === "appearance" && <ThemeSettings settings={settings} setSettings={setSettings} savedTheme={saved.theme} />}
+      {tab === "appearance" && <ThemeSettings settings={settings} setSettings={setSettings} savedTheme={saved.theme} savedSettings={saved} />}
       {tab === "import" && <div className="settings-card import-card"><PersonnelImport departments={departments} onDone={async () => { await onPersonnelChanged(); await load(); }} /><button className="import-personnel-link settings-text-link" onClick={onOpenPersonnel}>Personel Yönetimi’ni aç <ArrowUpRight size={14} /></button></div>}
       {tab === "backup" && <DatabaseSettings settings={settings} setSettings={setSettings} schemaVersion={status?.schemaVersion ?? "Kontrol ediliyor"} onChanged={() => void load()} notify={notify} />}
       {tab === "notifications" && <div className="notification-layout"><section className="settings-card"><div className="section-heading"><span className="settings-icon blue"><Bell size={20} /></span><div><h2>Panel içi bildirimler</h2><p>Üst menüde görmek istediğiniz işlem bildirimlerini seçin.</p></div></div><ToggleRow icon={FileSpreadsheet} title="Toplu aktarım sonuçları" description="Personel aktarımının tamamlanması ve atlanan satırların özeti." checked={settings.notifyImports} onChange={() => change("notifyImports", !settings.notifyImports)} /><ToggleRow icon={DatabaseBackup} title="Yedekleme ve geri yükleme" description="Otomatik, manuel ve güvenlik yedeklerinin oluşturulması." checked={settings.notifyBackups} onChange={() => change("notifyBackups", !settings.notifyBackups)} /><ToggleRow icon={MonitorCog} title="Kurum ve sistem güncellemeleri" description="Ayar değişiklikleri ve veritabanı şema güncellemeleri." checked={settings.notifySystem} onChange={() => change("notifySystem", !settings.notifySystem)} /><div className="settings-note"><Bell size={16} /><p>Bu tercihler yalnızca panel içi bildirimleri kontrol eder. E-posta veya işletim sistemi bildirimi gönderilmez.</p></div></section><section className="settings-card activity-card"><div className="section-heading"><Activity size={19} /><div><h2>Son işlemler</h2><p>Çalışma alanınızın kayıtlı işlem geçmişi.</p></div></div><ActivityList logs={logs} /></section></div>}

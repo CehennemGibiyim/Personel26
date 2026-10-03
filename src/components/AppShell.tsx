@@ -28,7 +28,7 @@ type PageKey =
 
 /** Renkli, yuvarlatılmış simge kutusu (logodaki gibi gradyanlı zemin üzerinde beyaz simge). */
 function NavIcon({ grad, size = "md", active = true, children }: { grad: string; size?: "sm" | "md" | "lg"; active?: boolean; children: React.ReactNode }) {
-  const box = size === "lg" ? "w-9 h-9 rounded-xl" : size === "sm" ? "w-6 h-6 rounded-lg" : "w-8 h-8 rounded-[10px]";
+  const box = size === "lg" ? "w-8 h-8 rounded-[10px]" : size === "sm" ? "w-6 h-6 rounded-lg" : "w-7 h-7 rounded-lg";
   return (
     <span className={cx("inline-flex items-center justify-center shrink-0 bg-gradient-to-br text-white shadow-md transition", box, grad, active ? "shadow-black/40 ring-1 ring-white/20" : "opacity-80 group-hover:opacity-100 shadow-black/30")}>
       {children}
@@ -268,7 +268,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
               type="button"
               onClick={() => navigate(n.key)}
               className={cx(
-                "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition cursor-pointer select-none group",
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition cursor-pointer select-none group",
                 page === n.key
                   ? "bg-gradient-to-r from-sky-500/20 to-sky-500/5 border border-sky-400/30 text-white shadow-[inset_2px_0_0_0_#38bdf8]"
                   : "text-white/55 hover:text-white hover:bg-white/[.05] border border-transparent"
