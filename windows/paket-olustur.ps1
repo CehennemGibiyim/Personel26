@@ -1,6 +1,27 @@
 [CmdletBinding()]
 param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1')
 $ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+# Gecici ag kesintilerine karsi tekrar deneyen indirme yardimcisi.
+function Get-WebWithRetry {
+  param([string]$Uri, [string]$OutFile, [int]$Tries = 5)
+  for ($i = 1; $i -le $Tries; $i++) {
+    try {
+      if ($OutFile) {
+        if (Test-Path $OutFile) { Remove-Item $OutFile -Force }
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec 600
+        return
+      }
+      return (Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 120)
+    } catch {
+      if ($OutFile -and (Test-Path $OutFile)) { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue }
+      if ($i -eq $Tries) { throw }
+      Write-Host "Indirme basarisiz ($i/$Tries): $Uri - $($_.Exception.Message). Tekrar deneniyor..." -ForegroundColor Yellow
+      Start-Sleep -Seconds (5 * $i)
+    }
+  }
+}
 $Root = Split-Path -Parent $PSScriptRoot
 $Out = Join-Path $Root 'Personel26-Portable'
 $Cache = Join-Path $Root '.paket-cache'
@@ -27,15 +48,15 @@ if (-not $SkipBuild) {
 if (-not (Test-Path (Join-Path $Root '.next\standalone\server.js'))) { throw 'Next.js standalone sunucu ciktisi bulunamadi.' }
 $NodeFile = "node-v$NodeVersion-win-x64.zip"
 $NodeZip = Join-Path $Cache $NodeFile
-if (-not (Test-Path $NodeZip)) { Invoke-WebRequest "https://nodejs.org/dist/v$NodeVersion/$NodeFile" -OutFile $NodeZip }
+if (-not (Test-Path $NodeZip)) { Get-WebWithRetry "https://nodejs.org/dist/v$NodeVersion/$NodeFile" $NodeZip }
 # Resmi Node.js SHA-256 kontrolu.
-$Checksums = (Invoke-WebRequest "https://nodejs.org/dist/v$NodeVersion/SHASUMS256.txt").Content
+$Checksums = (Get-WebWithRetry "https://nodejs.org/dist/v$NodeVersion/SHASUMS256.txt").Content
 $Line = ($Checksums -split "`n" | Where-Object { $_.Trim().EndsWith($NodeFile) } | Select-Object -First 1)
 if (-not $Line) { throw 'Node.js checksum kaydi bulunamadi.' }
 $Expected = ($Line.Trim() -split '\s+')[0]
 if ((Get-FileHash $NodeZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Expected.ToLowerInvariant()) { throw 'Node.js SHA-256 dogrulamasi basarisiz.' }
 $PgZip = Join-Path $Cache "postgresql-$PgVersion-windows-x64-binaries.zip"
-if (-not (Test-Path $PgZip)) { Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip" -OutFile $PgZip }
+if (-not (Test-Path $PgZip)) { Get-WebWithRetry "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip" $PgZip }
 if (Test-Path $Out) { Remove-Item $Out -Recurse -Force }
 New-Item -ItemType Directory -Force -Path "$Out\app", "$Out\node" | Out-Null
 Copy-Item "$Root\.next\standalone\*" "$Out\app\" -Recurse -Force
