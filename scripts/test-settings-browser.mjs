@@ -22,7 +22,7 @@ page.on('dialog', dialog => dialog.dismiss());
 try {
   await page.setViewport({ width: 1440, height: 1000 });
   await page.goto(base, { waitUntil: 'networkidle0' });
-  check('Ayarlar ekranı ve sol menü açıldı', await page.$('.settings-root') !== null && await page.$$eval('aside nav button', buttons => buttons.length === 11));
+  check('Ayarlar ekranı ve sol menü açıldı', await page.$('.settings-root') !== null && await page.$$eval('aside nav button', buttons => buttons.length === 12));
   check('Masaüstünde yatay taşma yok', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({ path: path.join(dir, 'settings-desktop.png'), fullPage: true });
   await page.click('#tab-appearance');
