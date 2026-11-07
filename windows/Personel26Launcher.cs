@@ -29,9 +29,12 @@ namespace Personel26
 
             bool quiet = Has(args, "--quiet");
             bool startOnly = Has(args, "--start-only");
+            // Bu mod otomasyon ve test icindir; hata olsa bile pencere acip beklemez.
+            if (startOnly) quiet = true;
             bool noBrowser = startOnly || Has(args, "--no-browser");
             bool forceBrowser = Has(args, "--browser");
             string root = Path.GetDirectoryName(Application.ExecutablePath);
+            Log(root, "Baslatildi: " + string.Join(" ", args));
 
             try
             {
@@ -41,6 +44,7 @@ namespace Personel26
             }
             catch (Exception ex)
             {
+                Log(root, "HATA: " + ex);
                 if (!quiet) ShowError("Personel26 baslatilamadi.\n\n" + ex.Message);
                 return 1;
             }
@@ -49,8 +53,10 @@ namespace Personel26
         private static int Start(string root, bool quiet, bool noBrowser, bool forceBrowser)
         {
             int port = ReadPort(root);
+            Log(root, "Start: port=" + port + " noBrowser=" + noBrowser);
             if (Healthy(port))
             {
+                Log(root, "Start: sunucu zaten calisiyor");
                 if (!noBrowser) OpenUi(port, forceBrowser);
                 return 0;
             }
@@ -79,11 +85,13 @@ namespace Personel26
 
                 if (result.TimedOut)
                 {
+                    Log(root, "Start: yonetim zaman asimi");
                     if (!quiet) ShowError("Personel26 zamanında başlatılamadı.\n\nAyrıntılar: " + Path.Combine(root, @"data\app-error.log"));
                     return 1;
                 }
                 if (result.ExitCode != 0)
                 {
+                    Log(root, "Start: yonetim basarisiz, kod=" + result.ExitCode + " cikti=" + Tail(result.Output));
                     if (!quiet) ShowError("Personel26 başlatılamadı.\n\n" + Tail(result.Output) +
                         "\n\nGünlükler: " + Path.Combine(root, @"data\app-error.log"));
                     return result.ExitCode == 0 ? 1 : result.ExitCode;
@@ -93,9 +101,11 @@ namespace Personel26
                 for (int i = 0; i < 40 && !Healthy(port); i++) Thread.Sleep(250);
                 if (!Healthy(port))
                 {
+                    Log(root, "Start: saglik kontrolu basarisiz");
                     if (!quiet) ShowError("Sunucu açıldı ancak panel yanıt vermiyor.\n\nAyrıntılar: " + Path.Combine(root, @"data\app-error.log"));
                     return 1;
                 }
+                Log(root, "Start: panel hazir");
                 if (!noBrowser) OpenUi(port, forceBrowser);
                 return 0;
             }
@@ -214,7 +224,9 @@ namespace Personel26
                         Application.DoEvents();
                     }
 
+                    Log(root, "Yonetim basliyor: " + action);
                     process.Start();
+                    Log(root, "Yonetim PID: " + process.Id);
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
 
@@ -237,14 +249,21 @@ namespace Personel26
 
                     if (!process.HasExited)
                     {
+                        Log(root, "Yonetim zaman asimi: " + action);
                         result.TimedOut = true;
                         lock (gate) result.Output = output.ToString();
                         return result;
                     }
 
-                    process.WaitForExit();
+                    // Parametresiz WaitForExit, alt sureclerin miras aldigi cikti
+                    // borularini bekleyebilir. Surec zaten bitmis; kisa ve sinirli
+                    // bekleme yeterli, aksi halde baslatici sonsuza kadar asili kalir.
+                    try { process.CancelOutputRead(); } catch { }
+                    try { process.CancelErrorRead(); } catch { }
+                    process.WaitForExit(2000);
                     result.ExitCode = process.ExitCode;
                     lock (gate) result.Output = output.ToString();
+                    Log(root, "Yonetim bitti: " + action + " kod=" + result.ExitCode);
                     if (splash != null) splash.SetStatus(result.ExitCode == 0 ? "Hazır." : "İşlem tamamlanamadı.");
                     return result;
                 }
@@ -391,6 +410,21 @@ namespace Personel26
                 tail.AppendLine(lines[i].Trim());
             }
             return tail.ToString().Trim();
+        }
+
+        private static void Log(string root, string message)
+        {
+            try
+            {
+                string directory = Path.Combine(root, "data");
+                if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+                string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + message + Environment.NewLine;
+                lock (typeof(Program))
+                {
+                    File.AppendAllText(Path.Combine(directory, "launcher.log"), line, new UTF8Encoding(false));
+                }
+            }
+            catch { }
         }
 
         private static bool Has(string[] args, string name)

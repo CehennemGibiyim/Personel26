@@ -18,6 +18,14 @@ function Manager([string]$Mode,[string[]]$More=@()) {
   & $PowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Target 'Personel26-Yonet.ps1') -Action $Mode -NoBrowser @More
   if ($LASTEXITCODE -ne 0) { throw "Yonetim komutu basarisiz: $Mode" }
 }
+function Run-Launcher([string[]]$Arguments,[int]$TimeoutSeconds=300) {
+  $process = Start-Process $Launcher -ArgumentList $Arguments -PassThru -WindowStyle Hidden
+  if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+    try { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } catch {}
+    throw "Personel26.exe zaman asimina ugradi: $($Arguments -join ' ')"
+  }
+  return $process.ExitCode
+}
 function Api([string]$Path,[string]$Method='GET',$Body=$null) {
   $args = @{ Uri="http://127.0.0.1:3210$Path"; Method=$Method; TimeoutSec=60 }
   if ($null -ne $Body) { $args.ContentType='application/json; charset=utf-8'; $args.Body=[Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 20)) }
@@ -51,8 +59,8 @@ try {
   # Masaustu kisayolunun gercek hedefi: ikonlu Personel26.exe. .bat degil.
   $Launcher = Join-Path $Target 'Personel26.exe'
   Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 20000))
-  $launch = Start-Process $Launcher -ArgumentList '--start-only' -Wait -PassThru -WindowStyle Hidden
-  Assert-Check 'Personel26.exe ile baslatma' ($launch.ExitCode -eq 0)
+  $launchCode = Run-Launcher -Arguments @('--start-only') -TimeoutSeconds 300
+  Assert-Check 'Personel26.exe ile baslatma' ($launchCode -eq 0)
   Assert-Check 'Ilk baslatma ve gercek veritabani saglik kontrolu' ((Api '/api/health').ok -eq $true)
   $boot = Api '/api/bootstrap'
   Assert-Check 'Sema ve ornek veri kurulumu' ($boot.departments.Count -gt 0 -and $boot.personnel.Count -gt 0)
@@ -68,8 +76,8 @@ try {
   $Id = $person.personnel.id
   $Before = (Api '/api/personnel').personnel.Count
   $exeBackupBefore = @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count
-  $exeBackup = Start-Process $Launcher -ArgumentList '--backup','--quiet' -Wait -PassThru -WindowStyle Hidden
-  Assert-Check 'Personel26.exe ile yedek alma' ($exeBackup.ExitCode -eq 0 -and @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt $exeBackupBefore)
+  $exeBackupCode = Run-Launcher -Arguments @('--backup','--quiet') -TimeoutSeconds 180
+  Assert-Check 'Personel26.exe ile yedek alma' ($exeBackupCode -eq 0 -and @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt $exeBackupBefore)
   $Backup = Join-Path $TempRoot 'personel26-ci-roundtrip.sql'
   Manager 'Backup' @('-BackupFile',$Backup)
   Assert-Check 'SQL yedek dosyasi olusturuldu' ((Test-Path $Backup) -and (Get-Item $Backup).Length -gt 100)
@@ -128,10 +136,13 @@ try {
   Assert-Check 'Mevcut kurulum uzerine yeniden kurulum' ($installAgain.ExitCode -eq 0)
   Manager 'Start'
   Assert-Check 'Kurulum guncellemesi veri klasorunu korudu' ((Api '/api/personnel').personnel.Count -eq $Before)
-  $exeStop = Start-Process $Launcher -ArgumentList '--stop','--quiet' -Wait -PassThru -WindowStyle Hidden
-  Assert-Check 'Personel26.exe ile kapatma' ($exeStop.ExitCode -eq 0)
+  $exeStopCode = Run-Launcher -Arguments @('--stop','--quiet') -TimeoutSeconds 120
+  Assert-Check 'Personel26.exe ile kapatma' ($exeStopCode -eq 0)
 } catch {
-  $_ | Out-String | Set-Content (Join-Path $ReportDir 'failure.txt') -Encoding UTF8
+  $failure = $_ | Out-String
+  $launcherLog = Join-Path $Target 'data\launcher.log'
+  if (Test-Path $launcherLog) { $failure += "`r`n--- launcher.log ---`r`n" + (Get-Content $launcherLog -Raw) }
+  $failure | Set-Content (Join-Path $ReportDir 'failure.txt') -Encoding UTF8
   throw
 } finally {
   try { if (Test-Path (Join-Path $Target 'Personel26-Yonet.ps1')) { Manager 'Stop' } } catch {}
@@ -139,7 +150,7 @@ try {
   $env:PATH = $PreviousPath
   # Baglanti sifresi ve SQL yedegi artifact'e alinmaz; yalnizca test/loglar.
   $Checks | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $ReportDir 'report.json') -Encoding UTF8
-  foreach ($log in @('app.log','app-error.log','postgres.log')) {
+  foreach ($log in @('app.log','app-error.log','postgres.log','launcher.log')) {
     $source = Join-Path $Target "data\$log"
     if (Test-Path $source) { Copy-Item $source $ReportDir -Force }
   }
