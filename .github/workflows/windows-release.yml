@@ -144,4 +144,4 @@ jobs:
             gh release create $tag --title $title --notes-file release-notes.md --latest @assets
           }
           if ($LASTEXITCODE -ne 0) { throw 'GitHub sürümü yayınlanamadı.' }
-          gh release view $tag --json tagName,url,isLatest
+          gh release view $tag --json tagName,url,isDraft,isPrerelease
