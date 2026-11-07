@@ -28,7 +28,7 @@ powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
 
 Hedef PC’de **`Personel26-Baslat.bat`** çalıştırın. İlk açılışta veritabanı otomatik kurulur; tarayıcı `http://127.0.0.1:3210` adresini açar. Durdurmak için `Personel26-Durdur.bat`.
 
-Verileriniz `data\` klasöründedir; SQL yedekleri kurulum klasöründeki `backups\` dizininde toplanır (son 7 gün saklanır). Durdurma sırasında son bir yedek otomatik alınır. Tüm kurulumu taşımak için `data\` ve `backups\` klasörlerini birlikte kopyalayın.
+Verileriniz `data\` klasöründedir; SQL yedekleri kurulum klasöründeki `backups\` dizininde toplanır (son 7 gün saklanır). Durdurma sırasında son bir yedek otomatik alınır. Paneldeki **Yedekleme** sayfasında klasör yolu gösterilir; listedeki bir yedeği **Geri yükle** ile tek tıkla döndürebilirsiniz (önce güvenlik yedeği alınır). Tüm kurulumu taşımak için `data\` ve `backups\` klasörlerini birlikte kopyalayın.
 
 ## Kurulum dosyasını (.exe) üretmek
 

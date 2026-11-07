@@ -255,6 +255,9 @@ select.settings-input option { background:#101b2c; }
 .backup-file-row > svg { flex-shrink:0; color:#5f88ab; }
 .backup-file-name { color:#b5cbe2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .backup-file-meta { margin-left:auto; flex-shrink:0; font-size:8.5px; color:#6f879f; }
+.backup-file-restore { flex-shrink:0; display:inline-flex; align-items:center; gap:4px; padding:4px 7px; border:1px solid #2b5a7a; border-radius:6px; background:#10283a; color:#7dd3fc; font-size:8.5px; font-weight:600; cursor:pointer; transition:background .15s,color .15s; }
+.backup-file-restore:hover { background:#163a52; color:#e0f2fe; }
+.backup-file-restore:disabled { opacity:.5; cursor:not-allowed; }
 .backup-file-empty { display:flex; align-items:center; gap:10px; padding:14px 0; color:#7188a4; font-size:9.5px; }
 .local-backup .settings-note { margin:0 22px 18px; }
 .local-backup code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:9px; color:#9dc3e6; background:#162335; border:1px solid #24364c; border-radius:4px; padding:0 4px; }
@@ -374,6 +377,7 @@ select.settings-input option { background:#101b2c; }
 .system-suggestions > .settings-note { margin:0 22px 22px; }
 .system-layout > .activity-card { grid-column:1/-1; }
 .shell-nav-label { font-size:8px; letter-spacing:1.5px; color:#526079; padding:15px 12px 8px; font-weight:600; }
+.shell-nav-badge { flex-shrink:0; font-size:8px; font-weight:700; color:#7dd3fc; background:#0c4a6e; border:1px solid #0284c7; border-radius:999px; padding:2px 6px; letter-spacing:.2px; }
 .settings-screen aside nav { padding-top:4px; }
 .settings-screen aside nav > button { padding-top:10px; padding-bottom:10px; border-radius:7px; }
 .settings-screen aside nav > button span > span:first-child { font-weight:500; font-size:11px; }

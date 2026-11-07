@@ -12,7 +12,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { appRoot } from "@/lib/server/update";
+import { appRoot, dataDir } from "@/lib/server/update";
 
 export const BACKUP_RETENTION_DAYS = 7;
 /** Kapanış yedeği bu süreden sık alınmaz (her sekme kapanışında yedek alınmasın). */
@@ -81,32 +81,36 @@ export function listBackupFiles(folder: string): BackupFile[] {
   }
 }
 
-function runPowerShell(args: string[], cwd: string, timeoutMs: number): Promise<string> {
+function runProcess(command: string, args: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv, failureLabel: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn("powershell.exe", args, {
+    const child = spawn(command, args, {
       cwd,
       windowsHide: true,
-      env: { ...process.env },
+      env,
     });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error("Yedekleme zaman aşımına uğradı (3 dakika)."));
+      reject(new Error(`${failureLabel} zaman aşımına uğradı.`));
     }, timeoutMs);
     child.stdout?.on("data", chunk => { stdout += String(chunk); });
     child.stderr?.on("data", chunk => { stderr += String(chunk); });
     child.on("error", error => {
       clearTimeout(timer);
-      reject(new Error(`Yedekleme başlatılamadı: ${error.message}`));
+      reject(new Error(`${failureLabel} başlatılamadı: ${error.message}`));
     });
     child.on("close", code => {
       clearTimeout(timer);
       if (code === 0) return resolve(stdout);
       const detail = (stderr || stdout).trim().split(/\r?\n/).slice(-3).join(" ");
-      reject(new Error(detail || `Yedekleme betiği başarısız oldu (kod ${code}).`));
+      reject(new Error(detail || `${failureLabel} başarısız oldu (kod ${code}).`));
     });
   });
+}
+
+function runPowerShell(args: string[], cwd: string, timeoutMs: number): Promise<string> {
+  return runProcess("powershell.exe", args, cwd, timeoutMs, { ...process.env }, "Yedekleme");
 }
 
 /**
@@ -158,6 +162,73 @@ export function autoBackupOnClose(): Promise<{ skipped: boolean; file?: string |
     () => { autoLock = null; },
   );
   return promise;
+}
+
+/** `data/connection.json` içindeki yerel PostgreSQL bağlantı bilgileri. */
+type PgConnection = { user: string; password: string; database: string; port: number };
+
+function pgConnection(): PgConnection {
+  const dir = dataDir();
+  if (!dir) throw new Error("Veri klasörü bulunamadı.");
+  const file = path.join(dir, "connection.json");
+  if (!existsSync(file)) throw new Error("Veritabanı bağlantı ayarları bulunamadı.");
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+  } catch {
+    throw new Error("Veritabanı bağlantı ayarları okunamadı.");
+  }
+  const user = typeof raw.user === "string" ? raw.user : "";
+  const password = typeof raw.password === "string" ? raw.password : "";
+  const database = typeof raw.database === "string" ? raw.database : "";
+  const port = Number(raw.pgPort);
+  if (!user || !password || !database || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Veritabanı bağlantı ayarları geçersiz.");
+  }
+  return { user, password, database, port };
+}
+
+/**
+ * Seçilen SQL yedeğini `psql` ile geri yükler.
+ *
+ * Önce güvenlik yedeği alınır. Uygulama durdurulmadan, tek işlem içinde
+ * (`--single-transaction`) geri yükleme yapılır; hata olursa veritabanı eski
+ * hâlinde kalır. İşlem sonrası panelin yenilenmesi önerilir.
+ */
+export async function restoreFolderBackup(fileName: string): Promise<{ file: string; safety: string | null; folder: string }> {
+  const reason = unsupportedReason();
+  if (reason) throw new Error(reason);
+  const root = appRoot();
+  const folder = backupFolder();
+  if (!root || !folder) throw new Error("Yedek klasörü belirlenemedi.");
+
+  // Yalnızca yedek klasöründeki adlar; `..` veya alt dizin kabul edilmez.
+  const name = path.basename(fileName);
+  if (!name || name !== fileName || !name.toLowerCase().endsWith(BACKUP_EXT)) {
+    throw new Error("Geçersiz yedek dosyası.");
+  }
+  const source = path.join(folder, name);
+  if (!existsSync(source)) throw new Error("Yedek dosyası bulunamadı.");
+  if (statSync(source).size === 0) throw new Error("Yedek dosyası boş.");
+
+  const psql = path.join(root, "pgsql", "bin", "psql.exe");
+  if (!existsSync(psql)) throw new Error("Pakette psql bulunamadı; yeni kurulum paketiyle güncelleyin.");
+  const connection = pgConnection();
+
+  const safety = await createFolderBackup();
+  await runProcess(
+    psql,
+    [
+      "-h", "127.0.0.1", "-p", String(connection.port), "-U", connection.user,
+      "-d", connection.database, "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", source,
+    ],
+    root,
+    5 * 60 * 1000,
+    { ...process.env, PGPASSWORD: connection.password },
+    "Geri yükleme",
+  );
+
+  return { file: source, safety: safety.file, folder };
 }
 
 /** Windows Gezgini'nde yedek klasörünü açar. */

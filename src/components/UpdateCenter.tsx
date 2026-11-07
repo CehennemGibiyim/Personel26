@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { APP_NAME, APP_VERSION, BROWSER_ONLY, RELEASES_URL } from "@/lib/app-info";
 import type { UpdateCheckResult, UpdateInfo, UpdateState, UpdateStatus } from "@/lib/update-types";
+import { fetchUpdateCheck } from "@/lib/update-client";
 import { formatBytes, releaseKindLabel, type UpdateRelease } from "@/lib/version-utils";
 import { cx } from "@/components/ui-kit";
 
@@ -56,10 +57,8 @@ export default function UpdateCenter({ checkRequest = 0 }: { checkRequest?: numb
     setChecking(true);
     setError(null);
     try {
-      const response = await fetch("/api/update/check", { method: "POST", cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error ?? "Güncelleme denetlenemedi.");
-      setCheck(data as UpdateCheckResult);
+      const data: UpdateCheckResult = await fetchUpdateCheck(!silent);
+      setCheck(data);
       setConfirming(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Güncelleme denetlenemedi.");

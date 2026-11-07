@@ -4,6 +4,7 @@ import {
   backupFolderInfo,
   createFolderBackup,
   openBackupFolder,
+  restoreFolderBackup,
 } from "@/lib/server/backup-folder";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function GET() {
 
 /**
  * `create`: elle SQL yedeği · `close`: kapanışta otomatik yedek (15 dk sınırı)
- * `open`: yedek klasörünü Windows Gezgini'nde aç.
+ * `restore`: seçilen SQL yedeğini geri yükle · `open`: yedek klasörünü aç.
  */
 export async function POST(request: Request) {
   try {
@@ -34,6 +35,12 @@ export async function POST(request: Request) {
     if (action === "close") {
       const result = await autoBackupOnClose();
       return Response.json({ ok: true, ...result });
+    }
+    if (action === "restore") {
+      const fileName = String(body?.fileName ?? "");
+      if (!fileName) return Response.json({ error: "Geri yüklenecek yedek seçilmedi." }, { status: 400 });
+      const result = await restoreFolderBackup(fileName);
+      return Response.json({ ok: true, ...result, ...backupFolderInfo() });
     }
     return Response.json({ error: "Geçersiz yedek işlemi." }, { status: 400 });
   } catch (error) {

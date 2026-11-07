@@ -23,6 +23,9 @@ import BackupPage from "@/components/BackupPage";
 import SettingsPage from "@/components/SettingsPage";
 import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/settings";
 import { APP_VERSION, BROWSER_ONLY } from "@/lib/app-info";
+import { fetchUpdateCheck } from "@/lib/update-client";
+import { latestReleaseNotes } from "@/lib/release-notes";
+import { isNewerVersion } from "@/lib/version-utils";
 
 type PageKey =
   | "nobet" | "puantaj" | "bordro" | "sablon" | "personel" | "izin" | "degisim"
@@ -79,6 +82,9 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const [month, setMonth] = useState(() => initialData?.today?.month ?? new Date().getMonth());
   const [page, setPage] = useState<PageKey>("ayarlar");
   const [staffGroup, setStaffGroup] = useState<StaffGroup>("SAGLIK");
+  // Panel açılırken güncelleme sessizce denetlenir; yeni sürüm varsa
+  // kenar çubuğundaki Ayarlar maddesinde rozet görünür.
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   // Elle eklenen nöbet grupları veritabanında (ayarlar tablosu) saklanır; böylece yedeğe girer.
   const [customGroups, setCustomGroups] = useState<StaffGroup[]>([]);
   // Sekme/pencere kapanırken kurulum klasörüne otomatik SQL yedeği istenir.
@@ -92,6 +98,24 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
     };
     window.addEventListener("pagehide", handler);
     return () => window.removeEventListener("pagehide", handler);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    if (BROWSER_ONLY) {
+      // Statik sürümde güncelleme sunucusu yok; derlemeye gömülü sürüm
+      // notlarından daha yeni bir sürüm varsa rozet gösterilir.
+      const latest = latestReleaseNotes();
+      if (latest && isNewerVersion(latest.version, APP_VERSION)) setUpdateVersion(latest.version);
+      return;
+    }
+    fetchUpdateCheck()
+      .then(result => {
+        if (!cancelled && result.updateAvailable && isNewerVersion(result.latestVersion, APP_VERSION)) {
+          setUpdateVersion(result.latestVersion);
+        }
+      })
+      .catch(() => { /* sessiz: çevrimdışıyken rozet gösterilmez */ });
+    return () => { cancelled = true; };
   }, []);
   useEffect(() => {
     (async () => {
@@ -294,6 +318,9 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
                 <span className="block text-xs font-bold leading-tight">{n.label}</span>
                 <span className="block text-[10px] opacity-60 truncate">{n.desc}</span>
               </span>
+              {n.key === "ayarlar" && updateVersion && (
+                <span className="shell-nav-badge" title={`Yeni sürüm v${updateVersion} hazır`}>v{updateVersion}</span>
+              )}
             </button>
             </div>
           ))}

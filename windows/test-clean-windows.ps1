@@ -64,6 +64,12 @@ try {
   Manager 'Restore' @('-BackupFile',$Backup)
   Assert-Check 'SQL yedekten tam geri donus' ((Api '/api/personnel').personnel.Count -eq $Before)
   Assert-Check 'Geri yuklenen kurum ayarlari' ((Api '/api/settings').settings.institution -eq 'CI KURUM KAYDI KORUNDU')
+  # Panelden tek tikla geri yukleme: klasor yedegi al, veriyi degistir, API ile geri don.
+  $folderBackup = Api '/api/backup/folder' 'POST' @{ action='create' }
+  Assert-Check 'Panelden klasor yedegi olusturuldu' ($folderBackup.ok -eq $true -and (Test-Path $folderBackup.file))
+  Api '/api/personnel' 'DELETE' @{id=$Id;hard=$true} | Out-Null
+  $folderRestore = Api '/api/backup/folder' 'POST' @{ action='restore'; fileName=(Split-Path -Leaf $folderBackup.file) }
+  Assert-Check 'Panelden SQL yedegini geri yukleme' ($folderRestore.ok -eq $true -and (Api '/api/personnel').personnel.Count -eq $Before)
   # Kapatmanin baska Node sureclerini oldurmedigini gercek surecle dogrula.
   $Other = Join-Path $TempRoot 'unrelated-node'
   New-Item -ItemType Directory -Force -Path $Other | Out-Null

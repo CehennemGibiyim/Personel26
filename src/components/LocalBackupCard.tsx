@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, Copy, FolderOpen, HardDriveDownload, Loader2, RefreshCw, ShieldCheck,
+  AlertTriangle, CheckCircle2, Copy, FolderOpen, HardDriveDownload, Loader2, RefreshCw, RotateCcw, ShieldCheck,
 } from "lucide-react";
 import { BROWSER_ONLY } from "@/lib/app-info";
 import { formatBytes } from "@/lib/version-utils";
@@ -31,6 +31,7 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
   const [info, setInfo] = useState<FolderInfo | null>(null);
   const [loading, setLoading] = useState(!BROWSER_ONLY);
   const [busy, setBusy] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   // notify her render'da yeni bir fonksiyon olabilir; yükleme döngüsünü önlemek
   // için güncel referansı tutulur, yükleme yalnızca bir kez çalışır.
@@ -69,6 +70,30 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
       notify(error instanceof Error ? error.message : "Yedek alınamadı.", true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function restore(fileName: string) {
+    const ok = window.confirm(
+      `"${fileName}" yedeği geri yüklenecek.\n\n` +
+      "Mevcut veriler bu yedekteki hâline dönecek. Önce otomatik güvenlik yedeği alınır. Devam edilsin mi?",
+    );
+    if (!ok) return;
+    setRestoring(fileName);
+    try {
+      const response = await fetch("/api/backup/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", fileName }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error ?? "Yedek geri yüklenemedi.");
+      notify(`Geri yükleme tamamlandı: ${fileName}. Sayfayı yenileyin.`);
+      await load();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Yedek geri yüklenemedi.", true);
+    } finally {
+      setRestoring(null);
     }
   }
 
@@ -137,10 +162,10 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
 
     {info?.supported && <>
       <div className="backup-folder-actions">
-        <button className="settings-btn primary" disabled={busy} onClick={create}>
+        <button className="settings-btn primary" disabled={busy || !!restoring} onClick={create}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : <HardDriveDownload size={15} />} Şimdi yedek al
         </button>
-        <button className="settings-btn" disabled={busy} onClick={load}><RefreshCw size={15} /> Yenile</button>
+        <button className="settings-btn" disabled={busy || !!restoring} onClick={load}><RefreshCw size={15} /> Yenile</button>
         <span className="settings-muted">Program kapatılırken de otomatik yedek alınır (en fazla 15 dakikada bir).</span>
       </div>
 
@@ -149,6 +174,15 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
           <HardDriveDownload size={14} />
           <span className="backup-file-name" title={file.name}>{file.name}</span>
           <span className="backup-file-meta">{formatBytes(file.size)} · {formatDate(file.modifiedAt)}</span>
+          <button
+            className="backup-file-restore"
+            disabled={!!restoring || busy}
+            onClick={() => void restore(file.name)}
+            title={`${file.name} yedeğini geri yükle`}
+          >
+            {restoring === file.name ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
+            {restoring === file.name ? "Yükleniyor" : "Geri yükle"}
+          </button>
         </div>)}
         {!info.files.length && <div className="backup-file-empty">
           <HardDriveDownload size={18} />
