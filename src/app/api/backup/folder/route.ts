@@ -46,6 +46,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Yedek işlemi başarısız.";
     if (/izni yok|izin yok/i.test(message)) return Response.json({ error: message }, { status: 403 });
+    if (/Geçersiz|seçilmedi|boş/i.test(message)) return Response.json({ error: message }, { status: 400 });
     const unsupported = /yalnızca Windows|bulunamadı|belirlenemedi|desteklenmiyor/i.test(message);
     return Response.json({ error: message }, { status: unsupported ? 409 : 500 });
   }
