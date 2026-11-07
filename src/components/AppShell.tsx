@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Wrench, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole, Banknote,
+  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Wrench, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole, Banknote, CircleHelp,
 } from "lucide-react";
 import type { Department, Personnel, Holiday, ShiftTemplate, StaffGroup } from "@/lib/shared";
 import { staffGroupMeta, staffGroupOf, personnelInDepartment, listStaffGroups, setExtraGroups, makeCustomGroup, isCustomGroup, parseStaffGroup } from "@/lib/shared";
@@ -20,6 +20,7 @@ import AnalysisPage from "@/components/AnalysisPage";
 import WarningsPage from "@/components/WarningsPage";
 import NotesPage from "@/components/NotesPage";
 import BackupPage from "@/components/BackupPage";
+import HelpPage from "@/components/HelpPage";
 import SettingsPage from "@/components/SettingsPage";
 import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/settings";
 import { APP_VERSION, BROWSER_ONLY } from "@/lib/app-info";
@@ -29,7 +30,7 @@ import { isNewerVersion } from "@/lib/version-utils";
 
 type PageKey =
   | "nobet" | "puantaj" | "bordro" | "sablon" | "personel" | "izin" | "degisim"
-  | "analiz" | "uyarilar" | "duyuru" | "yedek" | "ayarlar";
+  | "analiz" | "uyarilar" | "duyuru" | "yedek" | "yardim" | "ayarlar";
 
 /** Renkli, yuvarlatılmış simge kutusu (logodaki gibi gradyanlı zemin üzerinde beyaz simge). */
 function NavIcon({ grad, size = "md", active = true, children }: { grad: string; size?: "sm" | "md" | "lg"; active?: boolean; children: React.ReactNode }) {
@@ -53,6 +54,7 @@ const NAV: { key: PageKey; label: string; icon: React.ReactNode; desc: string; g
   { key: "uyarilar", label: "Mevzuat Uyarıları", icon: <ShieldAlert className="w-[17px] h-[17px]" />, desc: "Dinlenme ve limitler", grad: "from-rose-500 to-red-600" },
   { key: "duyuru", label: "Duyurular", icon: <Megaphone className="w-[17px] h-[17px]" />, desc: "Servis bildirimleri", grad: "from-pink-500 to-rose-600" },
   { key: "yedek", label: "Yedekleme", icon: <DatabaseBackup className="w-[17px] h-[17px]" />, desc: "Veri güvenliği", grad: "from-indigo-500 to-blue-700" },
+  { key: "yardim", label: "Yardım & Kılavuz", icon: <CircleHelp className="w-[17px] h-[17px]" />, desc: "Kurulum, video ve SSS", grad: "from-emerald-500 to-teal-600" },
   { key: "ayarlar", label: "Ayarlar", icon: <Settings2 className="w-[17px] h-[17px]" />, desc: "Kurum, görünüm ve sistem", grad: "from-slate-500 to-slate-700" },
 ];
 
@@ -354,7 +356,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
       <main className="flex-1 min-w-0 relative z-0">
         {page !== "ayarlar" && <header className="hidden lg:block sticky top-0 z-30 bg-[#070b14]/90 backdrop-blur-md border-b border-white/[.07]">
           {/* 1. satır — Departmanlar: en üstte, yan yana, tek satır (taşarsa yatay kaydırma) */}
-          <div className="flex items-center gap-2 px-6 pt-3 pb-2.5 border-b border-white/[.05]">
+          <div className={cx("items-center gap-2 px-6 pt-3 pb-2.5 border-b border-white/[.05]", page === "yardim" ? "hidden" : "flex")}>
             <span className="flex items-center gap-1.5 text-white/35 text-[10px] font-bold uppercase tracking-widest shrink-0">
               <Building2 className="w-3.5 h-3.5" /> Servisler / Departman
             </span>
@@ -415,7 +417,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
               <NavIcon grad={navItem.grad} size="lg">{navItem.icon}</NavIcon>
               <div className="min-w-0">
                 <h1 className="text-white font-black text-base leading-tight truncate" style={{ fontFamily: "var(--font-grotesk)" }}>{navItem.label}</h1>
-                <p className="text-white/35 text-[11px] truncate">{navItem.desc}{deptName ? ` · ${deptName}` : ""}</p>
+                <p className="text-white/35 text-[11px] truncate">{navItem.desc}{page !== "yardim" && deptName ? ` · ${deptName}` : ""}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -428,7 +430,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         </header>}
 
         {/* Mobil departman menüsü */}
-        <div className={cx("lg:hidden px-3 py-2 flex items-center gap-1.5 border-b border-white/[.07]", page === "ayarlar" && "!hidden")}>
+        <div className={cx("lg:hidden px-3 py-2 flex items-center gap-1.5 border-b border-white/[.07]", (page === "ayarlar" || page === "yardim") && "!hidden")}>
           <div className="relative flex-1" ref={deptRef}>
             <button
               type="button"
@@ -509,7 +511,8 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
             </>
           )}
           {page === "yedek" && <BackupPage />}
-          {page === "ayarlar" && <SettingsPage departments={departments} onPersonnelChanged={loadBootstrap} onOpenPersonnel={() => navigate("personel")} />}
+          {page === "yardim" && <HelpPage />}
+          {page === "ayarlar" && <SettingsPage departments={departments} onPersonnelChanged={loadBootstrap} onOpenPersonnel={() => navigate("personel")} onOpenHelp={() => navigate("yardim")} />}
         </div>
       </main>
       {showAddGroup && (

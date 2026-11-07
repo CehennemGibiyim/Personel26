@@ -49,6 +49,36 @@ if (-not $SkipBuild) {
   } finally { Pop-Location }
 }
 if (-not (Test-Path (Join-Path $Root '.next\standalone\server.js'))) { throw 'Next.js standalone sunucu ciktisi bulunamadi.' }
+# Masaustu kisayolunun hedefi olan ikonlu baslatici exe'yi derle.
+# .bat dosyalari yalnizca geriye donuk uyumluluk icin pakette kalir.
+function Build-Launcher {
+  $cscCandidates = @(
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
+    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
+  )
+  $csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $csc) { throw 'C# derleyicisi (csc.exe) bulunamadi. .NET Framework 4.x gerekli.' }
+  $build = Join-Path $env:TEMP ('p26-launcher-' + [guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Force -Path $build | Out-Null
+  try {
+    Copy-Item (Join-Path $PSScriptRoot 'Personel26Launcher.cs') $build -Force
+    Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') $build -Force
+    Copy-Item (Join-Path $PSScriptRoot 'Personel26.exe.manifest') $build -Force
+    $versionSource = Join-Path $build 'Personel26Launcher.version.cs'
+    $assemblyVersion = "$AppVersion.0"
+    $versionCode = "using System.Reflection;`r`n[assembly: AssemblyVersion(`"$assemblyVersion`")]`r`n[assembly: AssemblyFileVersion(`"$assemblyVersion`")]`r`n"
+    [IO.File]::WriteAllText($versionSource, $versionCode, (New-Object System.Text.UTF8Encoding($false)))
+    Push-Location $build
+    try {
+      & $csc /nologo /target:winexe /platform:anycpu /optimize+ /debug- /out:Personel26.exe /win32icon:personel26.ico /win32manifest:Personel26.exe.manifest /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll Personel26Launcher.cs Personel26Launcher.version.cs
+      if ($LASTEXITCODE -ne 0) { throw "Baslatici exe derlemesi basarisiz (kod $LASTEXITCODE)." }
+    } finally { Pop-Location }
+    Copy-Item (Join-Path $build 'Personel26.exe') (Join-Path $Out 'Personel26.exe') -Force
+    Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') (Join-Path $Out 'personel26.ico') -Force
+  } finally {
+    Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
 $NodeFile = "node-v$NodeVersion-win-x64.zip"
 $NodeZip = Join-Path $Cache $NodeFile
 if (-not (Test-Path $NodeZip)) { Get-WebWithRetry "https://nodejs.org/dist/v$NodeVersion/$NodeFile" $NodeZip }
@@ -78,6 +108,7 @@ New-Item -ItemType Directory -Force -Path "$Out\pgsql" | Out-Null
 foreach ($dir in @('bin','lib','share')) { Copy-Item "$PgTmp\pgsql\$dir" "$Out\pgsql\$dir" -Recurse -Force }
 foreach ($file in @('Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','Personel26-Yonet.ps1','Personel26-Guncelle.ps1','schema.sql','schema-update.sql')) { Copy-Item (Join-Path $PSScriptRoot $file) $Out -Force }
 Copy-Item (Join-Path $PSScriptRoot 'README-WINDOWS.md') (Join-Path $Out 'BENIOKU.md')
+Build-Launcher
 @{ application=$AppVersion; schema='2026.01'; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
 if (-not $NoZip) {
   $Zip = Join-Path $Root 'Personel26-Portable.zip'

@@ -19,7 +19,9 @@ SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 WizardStyle=modern
+SetupIconFile=personel26.ico
 UninstallDisplayName={#AppName} — Puantaj ve Nöbet Yönetimi
+UninstallDisplayIcon={app}\Personel26.exe
 UninstallFilesDir={app}\uninstall
 CloseApplications=no
 [Languages]
@@ -30,24 +32,35 @@ Source: "{#PortableDir}\*"; DestDir: "{app}"; Excludes: "data\*,backups\*"; Flag
 ; Kullanici yedekleri burada toplanir; kaldirma/guncelleme bu dosyalara dokunmaz.
 Name: "{app}\backups"
 [Icons]
-Name: "{group}\{#AppName} Başlat"; Filename: "{app}\Personel26-Baslat.bat"; WorkingDir: "{app}"
-Name: "{group}\{#AppName} Durdur"; Filename: "{app}\Personel26-Durdur.bat"; WorkingDir: "{app}"
-Name: "{group}\{#AppName} Yedekle"; Filename: "{app}\Personel26-Yedekle.bat"; WorkingDir: "{app}"
+; Tum kisayollar ikonlu Personel26.exe'yi acar; .bat dosyasi kullaniciya gosterilmez.
+Name: "{group}\{#AppName}"; Filename: "{app}\Personel26.exe"; WorkingDir: "{app}"; Comment: "Personel26 panelini ac"
+Name: "{group}\{#AppName} — Yedek Al"; Filename: "{app}\Personel26.exe"; Parameters: "--backup"; WorkingDir: "{app}"; Comment: "SQL yedegi olustur"
+Name: "{group}\{#AppName} — Durdur"; Filename: "{app}\Personel26.exe"; Parameters: "--stop"; WorkingDir: "{app}"; Comment: "Personel26'yi kapat"
 Name: "{group}\{#AppName} Kaldır"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Personel26-Baslat.bat"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Personel26.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 [Tasks]
 Name: "desktopicon"; Description: "Masaüstü kısayolu oluştur"; GroupDescription: "Kısayollar:"
 [Run]
-Filename: "{app}\Personel26-Baslat.bat"; Description: "{#AppName} şimdi başlatılsın"; Flags: postinstall nowait skipifsilent shellexec
+Filename: "{app}\Personel26.exe"; Description: "{#AppName} şimdi başlatılsın"; Flags: postinstall nowait skipifsilent
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Personel26-Yonet.ps1"" -Action Stop"; Flags: runhidden; RunOnceId: "StopP26"
+Filename: "{app}\Personel26.exe"; Parameters: "--stop --quiet"; Flags: runhidden; RunOnceId: "StopP26"
 [Code]
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
+  Launcher: String;
 begin
   Result := '';
-  if FileExists(ExpandConstant('{app}\Personel26-Durdur.bat')) then
+  Launcher := ExpandConstant('{app}\Personel26.exe');
+  if FileExists(Launcher) then
+  begin
+    // Onceki surumun ikonlu baslaticisi kapanis yedegini de alarak uygulamayi kapatir.
+    if not Exec(Launcher, '--stop --quiet', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      Result := 'Güncelleme öncesinde Personel26 kapatılamadı.'
+    else if ResultCode <> 0 then
+      Result := 'Personel26 kapatma işlemi başarısız. Uygulamayı kapatıp tekrar deneyin.';
+  end
+  else if FileExists(ExpandConstant('{app}\Personel26-Durdur.bat')) then
   begin
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Personel26-Yonet.ps1') + '" -Action Stop', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
       Result := 'Güncelleme öncesinde Personel26 kapatılamadı.'

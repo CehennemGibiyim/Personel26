@@ -7,10 +7,11 @@ proje kökündeki `package.json` dosyasıdır.
 
 Node.js ve PostgreSQL ayrıca kurulmaz: paket kendi Windows x64 çalıştırıcılarını içerir. Kurulum kullanıcı klasörüne yapılır ve yönetici yetkisi gerektirmez.
 
-- **Personel26-Baslat.bat**: veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu başlatır ve tarayıcıyı açar.
-- **Personel26-Durdur.bat**: sadece paketin PID dosyasındaki, yolu doğrulanmış Node sürecini ve kendi PostgreSQL kümesini kapatır. Diğer Node uygulamalarını kapatmaz.
-- **Personel26-Yedekle.bat**: kurulum klasöründeki `backups` dizinine yerel PostgreSQL SQL yedeği oluşturur.
-- Panelde **Ayarlar → Yedekleme & Veritabanı**: yedek klasörü yolu, elle yedek, klasörü açma, JSON yedeği, SQL dışa aktarma, doğrulanmış dosyadan geri yükleme ve şema güncelleme.
+- **Personel26.exe**: ikonlu masaüstü uygulaması. Çift tıklandığında veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu başlatır ve paneli Edge uygulama penceresinde açar. `--stop`, `--backup`, `--start-only` ve `--quiet` seçeneklerini destekler.
+- **Personel26.exe --stop**: yalnızca paketin PID dosyasındaki, yolu doğrulanmış Node sürecini ve kendi PostgreSQL kümesini kapatır; diğer Node uygulamalarına dokunmaz. Kapanış SQL yedeğini alır.
+- **Personel26.exe --backup**: kurulum klasöründeki `backups` dizinine yerel PostgreSQL SQL yedeği oluşturur ve dosyayı Explorer’da gösterir.
+- **Personel26-Baslat.bat / -Durdur.bat / -Yedekle.bat**: yalnızca otomasyon ve geriye dönük uyumluluk içindir; kurulum kısayolları artık bunları kullanmaz.
+- Panelde **Yedekleme**: yedek klasörü yolu, elle yedek, klasörü açma, listeden SQL geri yükleme; **Ayarlar → Yedekleme & Veritabanı** bölümünde ayrıca JSON yedeği, SQL dışa aktarma, doğrulanmış dosyadan geri yükleme ve şema güncelleme.
 - Program **Durdur** kısayoluyla kapatılırken son bir SQL yedeği otomatik alınır. Panel açıkken sekme kapatılırsa da 15 dakikada en fazla bir kapanış yedeği istenir.
 - Yedekler bugün dahil son **7 gün** saklanır; daha eski `personel26-*.sql` dosyaları yedek alınırken temizlenir.
 
@@ -21,13 +22,13 @@ Adres: `http://127.0.0.1:3210`. PostgreSQL yalnızca `127.0.0.1:5433` üzerinde 
 - `schema.sql`: boş veritabanının ilk kurulumu; tabloları oluşturur, kullanıcı verisi içermez. Boş veritabanında bir kez uygulanır.
 - `schema-update.sql`: mevcut verileri koruyarak yeni sütunları ve tabloları ekler. Tekrar çalıştırılabilir. Her başlatmada uygulanır.
 - Panelden indirilen veri SQL'i: uyumlu şema üzerine uygulama verilerini geri koyar. Önce yedek alır, uygulamayı kapatır ve yalnızca güvenilir dosyaları kullanırsınız.
-- `Personel26-Yedekle.bat` ile alınan SQL: `pg_dump --clean --if-exists` çıktısı; şema ve verileri içerir. Yerel PostgreSQL aracına geri verilebilir.
+- `Personel26.exe --backup` (veya paneldeki **Şimdi Yedek Al**) ile alınan SQL: `pg_dump --clean --if-exists` çıktısı; şema ve verileri içerir. Yerel PostgreSQL aracına geri verilebilir.
 
-SQL geri yükleme (uygulama klasöründe PowerShell):
+SQL geri yükleme (uygulama klasöründe PowerShell; paneldeki **Geri yükle** düğmesi de aynı akışı kullanır):
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\Personel26-Yonet.ps1 -Action Restore -BackupFile "D:\Yedek\personel26.sql"`
 
-Önce otomatik güvenlik yedeği alınır. SQL tek transaction ile çalıştırılır; başarısız olursa mevcut veriler korunur. Geri yükleme sonrasında şema güncellemesi tekrar uygulanır. Panel üzerinden SQL çalıştırılmaz: panel JSON dosyasını doğrular ve önizler.
+Önce otomatik güvenlik yedeği alınır. SQL tek transaction ile çalıştırılır; başarısız olursa mevcut veriler korunur. Geri yükleme sonrasında şema güncellemesi tekrar uygulanır. Panel, yalnızca `backups` klasöründeki doğrulanmış SQL dosyalarını listeler; rastgele dosya yolu veya dış URL kabul etmez.
 
 ## Güncelleme
 

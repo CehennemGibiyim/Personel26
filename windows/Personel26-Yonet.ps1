@@ -218,7 +218,7 @@ switch ($Action) {
     $old = Join-Path $Data 'app-before-update'
     $scriptBackup = Join-Path $Data 'root-before-update'
     # Kok dizindeki baslatici/sema dosyalari da yeni surumle gelir; geri donus icin sakla.
-    $rootFiles = @('Personel26-Yonet.ps1','Personel26-Guncelle.ps1','Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','schema.sql','schema-update.sql','BENIOKU.md')
+    $rootFiles = @('Personel26.exe','personel26.ico','Personel26-Yonet.ps1','Personel26-Guncelle.ps1','Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','schema.sql','schema-update.sql','BENIOKU.md')
     if (Test-Path $old) { Remove-Item $old -Recurse -Force }
     if (Test-Path $scriptBackup) { Remove-Item $scriptBackup -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $scriptBackup | Out-Null

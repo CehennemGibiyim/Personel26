@@ -48,7 +48,11 @@ try {
   $env:P26_NONINTERACTIVE = '1'
   Assert-Check 'Sistem Node.js kullanilmiyor' (-not (Get-Command node.exe -ErrorAction SilentlyContinue))
   Assert-Check 'Sistem PostgreSQL kullanilmiyor' (-not (Get-Command psql.exe -ErrorAction SilentlyContinue))
-  Manager 'Start'
+  # Masaustu kisayolunun gercek hedefi: ikonlu Personel26.exe. .bat degil.
+  $Launcher = Join-Path $Target 'Personel26.exe'
+  Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 20000))
+  $launch = Start-Process $Launcher -ArgumentList '--start-only' -Wait -PassThru -WindowStyle Hidden
+  Assert-Check 'Personel26.exe ile baslatma' ($launch.ExitCode -eq 0)
   Assert-Check 'Ilk baslatma ve gercek veritabani saglik kontrolu' ((Api '/api/health').ok -eq $true)
   $boot = Api '/api/bootstrap'
   Assert-Check 'Sema ve ornek veri kurulumu' ($boot.departments.Count -gt 0 -and $boot.personnel.Count -gt 0)
@@ -63,6 +67,9 @@ try {
   $person = Api '/api/personnel' 'POST' @{ name='CI TEST PERSONEL'; tcNo='11111111110'; personnelType='ISCI'; staffGroup='DESTEK'; departmentIds=@($boot.departments[0].id) }
   $Id = $person.personnel.id
   $Before = (Api '/api/personnel').personnel.Count
+  $exeBackupBefore = @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count
+  $exeBackup = Start-Process $Launcher -ArgumentList '--backup','--quiet' -Wait -PassThru -WindowStyle Hidden
+  Assert-Check 'Personel26.exe ile yedek alma' ($exeBackup.ExitCode -eq 0 -and @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt $exeBackupBefore)
   $Backup = Join-Path $TempRoot 'personel26-ci-roundtrip.sql'
   Manager 'Backup' @('-BackupFile',$Backup)
   Assert-Check 'SQL yedek dosyasi olusturuldu' ((Test-Path $Backup) -and (Get-Item $Backup).Length -gt 100)
@@ -121,7 +128,8 @@ try {
   Assert-Check 'Mevcut kurulum uzerine yeniden kurulum' ($installAgain.ExitCode -eq 0)
   Manager 'Start'
   Assert-Check 'Kurulum guncellemesi veri klasorunu korudu' ((Api '/api/personnel').personnel.Count -eq $Before)
-  Manager 'Stop'
+  $exeStop = Start-Process $Launcher -ArgumentList '--stop','--quiet' -Wait -PassThru -WindowStyle Hidden
+  Assert-Check 'Personel26.exe ile kapatma' ($exeStop.ExitCode -eq 0)
 } catch {
   $_ | Out-String | Set-Content (Join-Path $ReportDir 'failure.txt') -Encoding UTF8
   throw

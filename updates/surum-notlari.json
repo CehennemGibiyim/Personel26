@@ -1,6 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.4.0",
+      "kind": "feature",
+      "title": "İkonlu Personel26.exe, görsel yardım merkezi ve tek tıkla geri yükleme",
+      "date": "2026-11-07",
+      "notes": [
+        "Masaüstünde ve Başlat menüsünde artık .bat değil, kendi ikonu olan Personel26.exe var; çift tıklayınca panel açılır.",
+        "Panel Edge'in uygulama penceresinde açılır; Edge yoksa varsayılan tarayıcı kullanılır. Terminal penceresi görünmez.",
+        "Başlat menüsüne Personel26 — Yedek Al ve Personel26 — Durdur kısayolları eklendi; durdururken kapanış yedeği alınır.",
+        "Yedek listesinden seçilen SQL dosyasını tek tıkla geri yükleme; öncesinde güvenlik yedeği alınır.",
+        "Panel açılışında arka planda güncelleme denetimi ve kenar çubuğunda yeni sürüm rozeti.",
+        "Yardım & Kılavuz sayfası: kurulum adımları, ilk 10 dakika, görsel rehber, 42 saniyelik sessiz video ve sık sorulanlar.",
+        "PowerShell'in BOM'lu JSON dosyaları okunurken oluşan geri yükleme hatası düzeltildi."
+      ]
+    },
+    {
       "version": "1.3.0",
       "kind": "feature",
       "title": "Sürüm notları, yedek klasörü ve kapanış yedeği",
