@@ -32,6 +32,7 @@ try {
   Expand-Archive $Zip -DestinationPath $Package
   $install = Start-Process $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$Target`"","/LOG=`"$ReportDir\install.log`"") -Wait -PassThru
   Assert-Check 'Sessiz kullanici kurulumu' ($install.ExitCode -eq 0 -and (Test-Path (Join-Path $Target 'app\server.js')))
+  Assert-Check 'Kurulum klasorunde backups dizini' (Test-Path (Join-Path $Target 'backups'))
   # GitHub runner'lari gercek bos Windows imajlari degildir. Bu test sistemdeki
   # Node/PostgreSQL'e erisimi kapatir ve SADECE paketlenmis exe'leri kullanir.
   Get-Service -Name '*postgres*' -ErrorAction SilentlyContinue | Where-Object {$_.Status -eq 'Running'} | Stop-Service -Force -ErrorAction SilentlyContinue
@@ -69,6 +70,7 @@ try {
   Copy-Item (Join-Path $Target 'node\node.exe') (Join-Path $Other 'node.exe') -Force
   $UnrelatedProcess = Start-Process (Join-Path $Other 'node.exe') -ArgumentList @('-e','setInterval(()=>{},1000)') -PassThru -WindowStyle Hidden
   Manager 'Stop'
+  Assert-Check 'Kapanmadan once otomatik SQL yedegi' (@(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt 0)
   Assert-Check 'Yalnizca Personel26 sureci kapatildi' ($null -ne (Get-Process -Id $UnrelatedProcess.Id -ErrorAction SilentlyContinue))
   Assert-Check 'Runtime PID temizlendi' (-not (Test-Path (Join-Path $Target 'data\runtime.json')))
   $healthAfterStop = $false
@@ -80,6 +82,27 @@ try {
   Assert-Check 'Uygulama guncelleme sonrasi saglikli' ((Api '/api/health').ok -eq $true)
   Assert-Check 'Guncelleme personel verilerini korudu' ((Api '/api/personnel').personnel.Count -eq $Before)
   Assert-Check 'Guncelleme kurum ayarlarini korudu' ((Api '/api/settings').settings.institution -eq 'CI KURUM KAYDI KORUNDU')
+  # Panelden baslatilan guncelleme akisinin aynisi: indirme yerine yerel paket,
+  # SHA-256 dogrulamasi, Yonet.ps1 ile kurulum ve durum dosyasi.
+  $appVersion = (Get-Content (Join-Path (Split-Path -Parent $PSScriptRoot) 'package.json') -Raw | ConvertFrom-Json).version
+  $pendingDir = Join-Path $Target 'data\updates'
+  New-Item -ItemType Directory -Force -Path $pendingDir | Out-Null
+  $pendingFile = Join-Path $pendingDir 'pending.json'
+  @{
+    from      = '1.1.0'
+    to        = $appVersion
+    path      = $Zip
+    sha256    = (Get-FileHash $Zip -Algorithm SHA256).Hash.ToLowerInvariant()
+    fileName  = 'Personel26-Portable.zip'
+    createdAt = (Get-Date).ToString('o')
+  } | ConvertTo-Json | Set-Content -LiteralPath $pendingFile -Encoding UTF8
+  & $PowerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Target 'Personel26-Guncelle.ps1') -PendingFile $pendingFile
+  if ($LASTEXITCODE -ne 0) { throw 'Guncelleme betigi basarisiz oldu.' }
+  $updateStatus = Get-Content (Join-Path $Target 'data\update-status.json') -Raw | ConvertFrom-Json
+  Assert-Check 'Guncelleme durum dosyasi tamamlandi' ($updateStatus.state -eq 'done')
+  Assert-Check 'Panel guncellemesi uygulamayi yeniden baslatti' ((Api '/api/health').ok -eq $true)
+  Assert-Check 'Panel guncellemesi verileri korudu' ((Api '/api/personnel').personnel.Count -eq $Before)
+  Assert-Check 'Panel guncellemesi ayarlari korudu' ((Api '/api/settings').settings.institution -eq 'CI KURUM KAYDI KORUNDU')
   Manager 'Stop'
   $installAgain = Start-Process $Installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$Target`"","/LOG=`"$ReportDir\update-install.log`"") -Wait -PassThru
   Assert-Check 'Mevcut kurulum uzerine yeniden kurulum' ($installAgain.ExitCode -eq 0)

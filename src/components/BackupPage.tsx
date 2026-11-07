@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Btn, Spinner, EmptyState, Badge, cx } from "@/components/ui-kit";
 import { downloadFromApi, lastBackupDownload } from "@/lib/download";
+import LocalBackupCard from "@/components/LocalBackupCard";
 
 
 type BackupRow = {
@@ -83,6 +84,7 @@ export default function BackupPage() {
 
   return (
     <div className="space-y-3">
+      <LocalBackupCard notify={(message, error) => { if (error) { setErr(message); setMsg(""); } else { setMsg(message); setErr(""); } }} />
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-bold text-white flex items-center gap-2" style={{ fontFamily: "var(--font-grotesk)" }}>
           <DatabaseBackup className="w-4 h-4 text-emerald-400" /> Yedekleme

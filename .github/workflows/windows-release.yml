@@ -1,0 +1,147 @@
+name: Windows sürüm yayını
+# v1.2.0 gibi bir etiket itildiğinde (veya elle çalıştırıldığında) taşınabilir
+# paketi, kurulum dosyasını ve uygulama içi güncelleme beslemesini (update.json)
+# GitHub sürümüne yükler. Panel güncellemeyi bu sürümden denetler:
+#   https://github.com/CehennemGibiyim/Personel26/releases/latest/download/update.json
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Yayınlanacak sürüm (package.json ile aynı olmalı, örn. 1.2.0)'
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: '1'
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Sürüm ve etiket doğrulaması
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if (-not $version) { throw 'package.json içinde sürüm yok.' }
+          $inputVersion = '${{ inputs.version }}'
+          if ($inputVersion -and $inputVersion -ne $version) {
+            throw "Girilen sürüm ($inputVersion) package.json ($version) ile uyuşmuyor."
+          }
+          if ('${{ github.ref_type }}' -eq 'tag') {
+            $tag = '${{ github.ref_name }}'
+            if ($tag -ne "v$version") { throw "Etiket ($tag) package.json sürümü ($version) ile uyuşmuyor." }
+          }
+          "P26_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "P26_TAG=v$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Yayınlanacak sürüm: $version (v$version)" -ForegroundColor Cyan
+
+      - name: Bağımlılıkları kur
+        run: npm install --no-audit --no-fund
+
+      - name: Next.js tiplerini üret
+        run: npx next typegen
+
+      - name: TypeScript kontrolü
+        run: npx tsc --noEmit --pretty false
+
+      - name: Üretim derlemesi
+        run: npm run build
+
+      - name: Taşınabilir paket üret
+        shell: pwsh
+        run: ./windows/paket-olustur.ps1 -SkipBuild
+
+      - name: Kurulum dosyasını derle
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $compiler)) { choco install innosetup --yes --no-progress }
+          ./windows/kurulum-olustur.ps1 -SkipPackage -SkipBuild
+
+      - name: Sürüm notlarını hazırla
+        shell: pwsh
+        run: |
+          $changelog = Get-Content updates/surum-notlari.json -Raw | ConvertFrom-Json
+          $entry = $changelog.releases | Where-Object { $_.version -eq $env:P26_VERSION } | Select-Object -First 1
+          if ($entry) {
+            $title = $entry.title
+            $kind = $entry.kind
+            $noteLines = @($entry.notes)
+          } else {
+            # Kurulum paketi her durumda üretilir; sürüm notu eksikse son etiketten
+            # bu yana yapılan değişiklikler not olarak kullanılır.
+            Write-Warning "$($env:P26_VERSION) için updates/surum-notlari.json kaydı yok; notlar git geçmişinden hazırlanıyor."
+            $previous = git describe --tags --abbrev=0 "$($env:P26_TAG)^" 2>$null
+            if ($LASTEXITCODE -ne 0 -or -not $previous) { $previous = git rev-list --max-parents=0 HEAD | Select-Object -Last 1 }
+            $noteLines = @(git log "$previous..HEAD" --no-merges --pretty=format:'%s' | Where-Object { $_ })
+            if (-not $noteLines.Count) { $noteLines = @('Bakım ve kararlılık güncellemeleri.') }
+            $title = 'Bakım sürümü'
+            $kind = 'maintenance'
+          }
+          "P26_TITLE=$title" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "P26_KIND=$kind" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "P26_NOTES=$(@($noteLines) | ConvertTo-Json -Compress)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $lines = New-Object System.Collections.Generic.List[string]
+          $lines.Add("## Personel26 $($env:P26_VERSION) — $title")
+          $lines.Add('')
+          if ($kind) { $lines.Add("**Tür:** $kind") ; $lines.Add('') }
+          foreach ($note in @($noteLines)) { $lines.Add("- $note") }
+          $lines.Add('')
+          $lines.Add('### Güncelleme')
+          $lines.Add('')
+          $lines.Add('- **Otomatik:** Uygulamada Ayarlar → Hakkında → Güncellemeleri denetle')
+          $lines.Add('- Kurulum dosyası: `Personel26-Kurulum.exe` — veriler korunur')
+          $lines.Add('- Taşınabilir: `Personel26-Portable.zip`')
+          $lines.Add('- Web sürümü: https://cehennemgibiyim.github.io/Personel26/')
+          [IO.File]::WriteAllText((Join-Path (Get-Location) 'release-notes.md'), ($lines -join "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+
+      - name: Güncelleme bildirimini (update.json) üret
+        shell: pwsh
+        run: |
+          $noteLines = @()
+          if ($env:P26_NOTES) { $noteLines = @($env:P26_NOTES | ConvertFrom-Json) }
+          ./windows/guncelleme-manifest.ps1 -Version $env:P26_VERSION -Tag $env:P26_TAG -ZipPath ./Personel26-Portable.zip -OutputPath ./update.json -Title $env:P26_TITLE -Kind $env:P26_KIND -Notes $noteLines
+
+      - name: Dağıtım arşivini sakla
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            Personel26-Portable.zip
+            windows/Personel26-Kurulum.exe
+            update.json
+          retention-days: 14
+
+      - name: GitHub sürümünü oluştur / güncelle
+        shell: pwsh
+        run: |
+          $tag = $env:P26_TAG
+          $title = "Personel26 $env:P26_VERSION"
+          $assets = @('Personel26-Portable.zip', 'windows\Personel26-Kurulum.exe', 'update.json')
+          foreach ($asset in $assets) { if (-not (Test-Path $asset)) { throw "Sürüm varlığı eksik: $asset" } }
+          gh release view $tag --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Sürüm varlıkları güncellenemedi.' }
+            gh release edit $tag --title $title --notes-file release-notes.md --latest
+          } else {
+            gh release create $tag --title $title --notes-file release-notes.md --latest @assets
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub sürümü yayınlanamadı.' }
+          gh release view $tag --json tagName,url,isLatest

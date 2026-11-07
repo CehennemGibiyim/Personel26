@@ -2,6 +2,8 @@ param(
   [ValidateSet('Start','Stop','Backup','Restore','Update')][string]$Action = 'Start',
   [string]$BackupFile,
   [string]$PackagePath,
+  [string]$FromVersion,
+  [string]$ToVersion,
   [switch]$NoBrowser
 )
 $ErrorActionPreference = 'Stop'
@@ -11,6 +13,37 @@ $PgBin = Join-Path $Root 'pgsql\bin'
 $PgData = Join-Path $Data 'pgdata'
 $RuntimeFile = Join-Path $Data 'runtime.json'
 $ConfigFile = Join-Path $Data 'connection.json'
+$UpdatesDir = Join-Path $Data 'updates'
+$StatusFile = Join-Path $Data 'update-status.json'
+$UpdateLog = Join-Path $UpdatesDir 'update.log'
+# Yedekler kurulum klasorunde toplanir; kullanici kolayca bulup baska bir diske kopyalayabilir.
+$BackupsDir = if ($env:P26_BACKUP_DIR) { [IO.Path]::GetFullPath($env:P26_BACKUP_DIR) } else { Join-Path $Root 'backups' }
+$BackupRetentionDays = 7
+# Panelin guncelleme ekrani bu dosyayi okur; betik cokerse son durum gorunur.
+function Write-UpdateStatus([string]$State, [string]$Message) {
+  try {
+    New-Item -ItemType Directory -Force -Path $UpdatesDir | Out-Null
+    $status = @{ state = $State; message = $Message; updatedAt = (Get-Date).ToString('o') }
+    if (Test-Path $StatusFile) {
+      try {
+        $existing = Get-Content -LiteralPath $StatusFile -Raw | ConvertFrom-Json
+        # Bitmis bir onceki guncellemenin bilgileri yeni isleme tasinmaz.
+        if ($existing.state -notin @('done','error')) {
+          foreach ($name in @('startedAt','from','to')) {
+            $property = $existing.PSObject.Properties[$name]
+            if ($property -and $property.Value) { $status[$name] = $property.Value }
+          }
+        }
+      } catch { }
+    }
+    if (-not $status.from -and $FromVersion) { $status.from = $FromVersion }
+    if (-not $status.to -and $ToVersion) { $status.to = $ToVersion }
+    if ($State -eq 'done' -or $State -eq 'error') { $status.finishedAt = (Get-Date).ToString('o') }
+    # BOM'suz UTF-8 yaz: panel JSON'u dogrudan okur.
+    [IO.File]::WriteAllText($StatusFile, ($status | ConvertTo-Json -Depth 5), (New-Object System.Text.UTF8Encoding($false)))
+    Add-Content -LiteralPath $UpdateLog -Value ('[{0}] {1}: {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $State, $Message) -Encoding UTF8
+  } catch { }
+}
 function Invoke-Pg([string]$Tool, [string[]]$Arguments) {
   $Executable = Join-Path $PgBin ($Tool + '.exe')
   if (-not (Test-Path $Executable)) { throw "Pakette $Tool bulunamadi." }
@@ -44,10 +77,8 @@ function Stop-All {
     & (Join-Path $PgBin 'pg_ctl.exe') status -D $PgData *> $null
     if ($LASTEXITCODE -eq 0) { Invoke-Pg -Tool 'pg_ctl' -Arguments @('stop','-D',$PgData,'-m','fast','-w','-t','60') }
   }
-  Write-Host 'Personel26 kapatildi. Veriler data klasorunde korundu.'
+  Write-Host 'Personel26 kapatildi. Veriler data, yedekler backups klasorunde korundu.'
 }
-if ($Action -eq 'Stop') { Stop-All; exit 0 }
-if (-not (Test-Path (Join-Path $Root 'node\node.exe')) -or -not (Test-Path (Join-Path $PgBin 'postgres.exe'))) { throw 'Pakette tasinabilir Node.js veya PostgreSQL eksik.' }
 New-Item -ItemType Directory -Force -Path $Data | Out-Null
 if (-not (Test-Path $ConfigFile)) {
   $bytes = New-Object byte[] 32
@@ -63,6 +94,7 @@ if (-not (Test-Path $ConfigFile)) {
 $Config = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 $env:PGPASSWORD = $Config.password
 $PgArgs = @('-h','127.0.0.1','-p',[string]$Config.pgPort,'-U',$Config.user)
+
 function Start-PgServer {
   # pg_ctl start komutu boru hattina (| Write-Host) baglanirsa, arka planda kalan
   # postgres sureci ayni boruyu miras alir ve PowerShell hic bitmez. Bu yuzden
@@ -120,22 +152,51 @@ function Start-App {
   $env:PORT = [string]$Config.appPort
   $env:HOSTNAME = '127.0.0.1'
   $env:NODE_ENV = 'production'
+  # Panelin guncelleme uclari kurulum ve veri klasorunu buradan ogrenir.
+  $env:P26_ROOT = $Root
+  $env:P26_DATA_DIR = $Data
+  $env:P26_BACKUP_DIR = $BackupsDir
   $app = Start-Process -FilePath (Join-Path $Root 'node\node.exe') -ArgumentList @('server.js') -WorkingDirectory (Join-Path $Root 'app') -PassThru -WindowStyle Hidden -RedirectStandardOutput (Join-Path $Data 'app.log') -RedirectStandardError (Join-Path $Data 'app-error.log')
   @{pid=$app.Id; root=$Root} | ConvertTo-Json | Set-Content $RuntimeFile -Encoding UTF8
   try { Wait-Health } catch { Stop-App; throw }
 }
+function Remove-OldBackups {
+  if (-not (Test-Path $BackupsDir)) { return }
+  $limit = (Get-Date).Date.AddDays(-$BackupRetentionDays)
+  Get-ChildItem -LiteralPath $BackupsDir -Filter 'personel26-*.sql' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTime -lt $limit } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+}
 function Native-Backup([string]$Destination) {
   Ensure-Database
   if (-not $Destination) {
-    $dir = Join-Path $Data 'backups'
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $Destination = Join-Path $dir ('personel26-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.sql')
+    New-Item -ItemType Directory -Force -Path $BackupsDir | Out-Null
+    $Destination = Join-Path $BackupsDir ('personel26-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.sql')
   }
   Invoke-Pg -Tool 'pg_dump' -Arguments ($PgArgs + @('-d',$Config.database,'--clean','--if-exists','--no-owner','--no-privileges','-f',$Destination))
   if (-not (Test-Path $Destination) -or (Get-Item $Destination).Length -eq 0) { throw 'SQL yedegi olusturulamadi.' }
+  Remove-OldBackups
   Write-Host "SQL yedegi: $Destination"
   return $Destination
 }
+function Backup-BeforeStop {
+  # Program kapatilirken (Durdur kisayolu veya kaldirma) veritabani calisiyorsa
+  # son bir SQL yedegi alinir. Hata kapanmayi engellemez.
+  try {
+    if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) { return }
+    if (-not (Test-Path (Join-Path $PgBin 'pg_ctl.exe'))) { return }
+    & (Join-Path $PgBin 'pg_ctl.exe') status -D $PgData *> $null
+    if ($LASTEXITCODE -ne 0) { return }
+    Native-Backup '' | Out-Null
+    Write-Host 'Kapanmadan once otomatik SQL yedegi alindi.'
+  } catch {
+    Write-Warning ('Kapanis yedegi alinamadi: ' + $_.Exception.Message)
+  }
+}
+# Kapatma, paket dosyalari eksik olsa bile calisir ve veritabani acikken yedek alir.
+# Tum fonksiyonlar tanimlandiktan sonra cagrilmalidir.
+if ($Action -eq 'Stop') { Backup-BeforeStop; Stop-All; exit 0 }
+if (-not (Test-Path (Join-Path $Root 'node\node.exe')) -or -not (Test-Path (Join-Path $PgBin 'postgres.exe'))) { throw 'Pakette tasinabilir Node.js veya PostgreSQL eksik.' }
 switch ($Action) {
   'Start' { Start-App; if (-not $NoBrowser -and $env:P26_NO_BROWSER -ne '1') { Start-Process "http://127.0.0.1:$($Config.appPort)" }; Write-Host 'Personel26 hazir.' }
   'Backup' { Native-Backup $BackupFile | Out-Null }
@@ -149,23 +210,47 @@ switch ($Action) {
   }
   'Update' {
     if (-not $PackagePath -or -not (Test-Path (Join-Path $PackagePath 'app\server.js'))) { throw 'Yeni portable paket klasorunu belirtin.' }
+    Write-UpdateStatus 'stopping' 'Uygulama kapatiliyor...'
     Stop-App; Ensure-Database
+    Write-UpdateStatus 'backing-up' 'Veritabani guvenlik yedegi aliniyor...'
     $safety = Native-Backup ''
+    Write-UpdateStatus 'installing' 'Yeni surum dosyalari yerlestiriliyor...'
     $old = Join-Path $Data 'app-before-update'
+    $scriptBackup = Join-Path $Data 'root-before-update'
+    # Kok dizindeki baslatici/sema dosyalari da yeni surumle gelir; geri donus icin sakla.
+    $rootFiles = @('Personel26-Yonet.ps1','Personel26-Guncelle.ps1','Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','schema.sql','schema-update.sql','BENIOKU.md')
     if (Test-Path $old) { Remove-Item $old -Recurse -Force }
+    if (Test-Path $scriptBackup) { Remove-Item $scriptBackup -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $scriptBackup | Out-Null
+    foreach ($file in $rootFiles) {
+      $source = Join-Path $Root $file
+      if (Test-Path $source) { Copy-Item $source (Join-Path $scriptBackup $file) -Force }
+    }
     Move-Item (Join-Path $Root 'app') $old
     try {
       Copy-Item (Join-Path $PackagePath 'app') (Join-Path $Root 'app') -Recurse -Force
-      Copy-Item (Join-Path $PackagePath 'schema-update.sql') (Join-Path $Root 'schema-update.sql') -Force
+      foreach ($file in $rootFiles) {
+        $source = Join-Path $PackagePath $file
+        if (Test-Path $source) { Copy-Item $source (Join-Path $Root $file) -Force }
+      }
+      Write-UpdateStatus 'restarting' 'Yeni surum baslatiliyor ve saglik kontrolu yapiliyor...'
       Start-App
       Remove-Item $old -Recurse -Force
+      Remove-Item $scriptBackup -Recurse -Force -ErrorAction SilentlyContinue
+      $label = if ($ToVersion) { $ToVersion } else { 'yeni' }
+      Write-UpdateStatus 'done' ("Personel26 {0} surumune guncellendi. Veriler korundu." -f $label)
       Write-Host "Guncelleme tamamlandi. Veriler korundu. Guvenlik yedegi: $safety"
     } catch {
+      Write-UpdateStatus 'error' 'Guncelleme basarisiz; onceki surum geri yuklendi. Ayrintilar data/updates/update.log dosyasinda.'
       Stop-App
       if (Test-Path (Join-Path $Root 'app')) { Remove-Item (Join-Path $Root 'app') -Recurse -Force }
       Move-Item $old (Join-Path $Root 'app')
+      foreach ($file in $rootFiles) {
+        $backup = Join-Path $scriptBackup $file
+        if (Test-Path $backup) { Copy-Item $backup (Join-Path $Root $file) -Force }
+      }
       Start-App
-      throw 'Guncelleme basarisiz; onceki uygulama geri alindi. SQL guvenlik yedegi data/backups icinde.'
+      throw 'Guncelleme basarisiz; onceki uygulama geri alindi. SQL guvenlik yedegi backups klasorunde.'
     }
   }
 }

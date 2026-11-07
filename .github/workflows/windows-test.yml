@@ -35,8 +35,7 @@ jobs:
         run: |
           $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
           if (-not (Test-Path $compiler)) { choco install innosetup --yes --no-progress }
-          & $compiler windows/installer.iss
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup derlemesi başarısız.' }
+          ./windows/kurulum-olustur.ps1 -SkipPackage -SkipBuild
       - uses: actions/upload-artifact@v4
         with:
           name: windows-distribution

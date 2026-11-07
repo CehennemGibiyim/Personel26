@@ -1,0 +1,42 @@
+{
+  "releases": [
+    {
+      "version": "1.3.0",
+      "kind": "feature",
+      "title": "Sürüm notları, yedek klasörü ve kapanış yedeği",
+      "date": "2026-11-07",
+      "notes": [
+        "Yardım ve Hakkında bölümüne sürüm notları kartı eklendi; Windows kurulum paketi ve web sürümü buradan açılır.",
+        "Windows kurulum paketi her sürümde otomatik üretilir; sürüm notu eksik olsa bile kurulum dosyası yayına eklenir.",
+        "Yedekler artık kurulum klasöründeki backups dizininde toplanır; yol panelde gösterilir ve klasör tek düğmeyle açılır.",
+        "Elle yedek alınabilir; program kapatılırken de otomatik SQL yedeği alınır (en fazla 15 dakikada bir).",
+        "Yedekler bugün dahil son 7 gün saklanır; daha eski SQL yedekleri otomatik temizlenir.",
+        "Windows Durdur kısayolu kapanmadan önce son bir SQL yedeği alır."
+      ]
+    },
+    {
+      "version": "1.2.0",
+      "kind": "feature",
+      "title": "Uygulama içi güncelleme merkezi",
+      "date": "2026-11-07",
+      "notes": [
+        "Ayarlar → Hakkında bölümüne güncelleme merkezi eklendi.",
+        "Güncellemeleri denetle ile yeni sürüm ve hata düzeltmeleri görülebilir.",
+        "Ara sürümler atlanarak doğrudan en son sürüme geçilir; atlanan sürümlerin notları da gösterilir.",
+        "Güncelleme öncesi otomatik SQL güvenlik yedeği alınır, sorun çıkarsa önceki sürüme dönülür.",
+        "Windows kurulum dosyası ve taşınabilir paket sürüm numarasını package.json'dan alır.",
+        "GitHub sürümleri için update.json beslemesi ve yayın iş akışı eklendi."
+      ]
+    },
+    {
+      "version": "1.1.0",
+      "kind": "feature",
+      "title": "Windows taşınabilir paket ve kurulum dosyası",
+      "notes": [
+        "Taşınabilir Node.js ve PostgreSQL ile sistemde kurulu araç gerekmeden çalışma.",
+        "Inno Setup tabanlı kullanıcı kurulumu, masaüstü kısayolu ve veri korumalı yeniden kurulum.",
+        "SQL yedekleme, geri yükleme ve şema güncelleme komutları."
+      ]
+    }
+  ]
+}

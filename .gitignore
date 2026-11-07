@@ -16,6 +16,12 @@ Personel26-Portable/
 Personel26-Portable.zip
 .paket-cache/
 windows/Personel26-Kurulum.exe
+# Sürüm yayını sırasında üretilen geçici dosyalar
+update.json
+release-notes.md
+
+# Yerel yedekler (kurulum klasöründe oluşur)
+backups/
 
 # Test / geçici
 final-state.png

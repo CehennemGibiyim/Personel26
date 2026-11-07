@@ -1,5 +1,9 @@
 #define AppName "Personel26"
-#define AppVersion "1.1.0"
+; Surum numarasi windows\kurulum-olustur.ps1 tarafindan /DAppVersion ile verilir.
+; Kurulum dosyasini bu betikle derleyin; dogrudan ISCC kullanmayin.
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define PortableDir "..\Personel26-Portable"
 [Setup]
 AppId={{7E1B2A64-9C3D-4B8F-A2E5-P26PUANTAJ01}
@@ -21,7 +25,10 @@ CloseApplications=no
 [Languages]
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 [Files]
-Source: "{#PortableDir}\*"; DestDir: "{app}"; Excludes: "data\*"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "{#PortableDir}\*"; DestDir: "{app}"; Excludes: "data\*,backups\*"; Flags: recursesubdirs createallsubdirs ignoreversion
+[Dirs]
+; Kullanici yedekleri burada toplanir; kaldirma/guncelleme bu dosyalara dokunmaz.
+Name: "{app}\backups"
 [Icons]
 Name: "{group}\{#AppName} Başlat"; Filename: "{app}\Personel26-Baslat.bat"; WorkingDir: "{app}"
 Name: "{group}\{#AppName} Durdur"; Filename: "{app}\Personel26-Durdur.bat"; WorkingDir: "{app}"

@@ -22,6 +22,7 @@ import NotesPage from "@/components/NotesPage";
 import BackupPage from "@/components/BackupPage";
 import SettingsPage from "@/components/SettingsPage";
 import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/settings";
+import { APP_VERSION, BROWSER_ONLY } from "@/lib/app-info";
 
 type PageKey =
   | "nobet" | "puantaj" | "bordro" | "sablon" | "personel" | "izin" | "degisim"
@@ -80,6 +81,18 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
   const [staffGroup, setStaffGroup] = useState<StaffGroup>("SAGLIK");
   // Elle eklenen nöbet grupları veritabanında (ayarlar tablosu) saklanır; böylece yedeğe girer.
   const [customGroups, setCustomGroups] = useState<StaffGroup[]>([]);
+  // Sekme/pencere kapanırken kurulum klasörüne otomatik SQL yedeği istenir.
+  // Sunucu 15 dakikada en fazla bir kapanış yedeği alır; hangi sayfa açık
+  // olursa olsun çalışması için dinleyici burada tutulur.
+  useEffect(() => {
+    if (BROWSER_ONLY) return;
+    const handler = () => {
+      const blob = new Blob([JSON.stringify({ action: "close" })], { type: "application/json" });
+      navigator.sendBeacon("/api/backup/folder", blob);
+    };
+    window.addEventListener("pagehide", handler);
+    return () => window.removeEventListener("pagehide", handler);
+  }, []);
   useEffect(() => {
     (async () => {
       try {
@@ -305,7 +318,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         {page === "ayarlar" && <div className="settings-sidebar-footer">
           <div className="sidebar-workspace"><Database size={16} /><div><b>Kurum çalışma alanı</b><small>{departments.length > 0 ? "PostgreSQL bağlantısı etkin" : "Bağlantı hazırlanıyor"}</small></div></div>
           <div className="sidebar-user-card"><span className="user-avatar">YK</span><div><b>Yönetici</b><small>Kurum yönetimi</small></div><details className="sidebar-tools"><summary aria-label="Ek araçlar"><Ellipsis size={17} /></summary><div><Link href="/personel" target="_blank"><Fingerprint size={14} /> Personel sorgu ekranı</Link><PreviewDownloadButton /></div></details></div>
-          <div className="sidebar-version"><LockKeyhole size={9} /> Kurum içi kullanım<span>v1.1.0</span></div>
+          <div className="sidebar-version"><LockKeyhole size={9} /> Kurum içi kullanım<span>v{APP_VERSION}</span></div>
         </div>}
       </aside>
       {sidebarOpen && <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setSidebarOpen(false)} />}

@@ -23,7 +23,8 @@ süreçlerini tek panelden yöneten web uygulaması.
 - **Analiz & Uyarılar** — Son 6 ay Gini tabanlı adalet skoru + grafikler; 11 saat
   dinlenme, ardışık nöbet, haftalık 45/40 saat ve gece limiti kontrolleri
 - **Değişim Talepleri** — Nöbet takası/devri, onayda otomatik uygulanır
-- **Yedekleme** — Günlük otomatik + manuel yedek, tek tıkla geri yükleme
+- **Yedekleme** — Günlük otomatik + manuel yedek, kapanışta SQL yedeği,
+  kurulum klasöründeki `backups` dizini ve klasör yolu, tek tıkla geri yükleme
   (öncesinde güvenlik yedeği), JSON indirme, son 30 yedek
 - **`/personel`** — Şifresiz, salt-okunur personel sorgu ekranı (TC + soyad doğrulamalı,
   hız sınırlı)
@@ -70,6 +71,12 @@ powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
 
 Ayrıntılar ve `Personel26-Kurulum.exe` üretimi için:
 **[windows/README-WINDOWS.md](windows/README-WINDOWS.md)**
+
+Güncellemeler uygulamanın içinden yapılır: **Ayarlar → Hakkında & Güncelleme**.
+Yeni sürüm varsa ara sürümler atlanarak doğrudan kurulur; önce otomatik SQL yedeği
+alınır, sorun çıkarsa önceki sürüme dönülür. Aynı ekrandaki **Sürüm notları** kartı
+Windows kurulum paketini ve web sürümünü indirmeyi sağlar. Yayınlama ve teknik
+ayrıntılar: **[GUNCELLEME.md](GUNCELLEME.md)**
 
 ## Proje Yapısı
 

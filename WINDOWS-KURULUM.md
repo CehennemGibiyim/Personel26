@@ -10,7 +10,8 @@ Ayrıntılı adımlar, SSS ve klasör yapısı:
 | Paket | Dosya | Kullanım |
 | --- | --- | --- |
 | Taşınabilir (önerilen) | `windows/paket-olustur.ps1` → `Personel26-Portable\` | Klasörü kopyala, `Personel26-Baslat.bat` çift tıkla. Kurulum gerekmez. |
-| Kurulum (.exe) | `windows/installer.iss` (Inno Setup) → `Personel26-Kurulum.exe` | Klasik İleri–İleri–Bitir kurulumu, masaüstü kısayolu |
+| Kurulum (.exe) | `windows/kurulum-olustur.ps1` (Inno Setup) → `Personel26-Kurulum.exe` | Klasik İleri–İleri–Bitir kurulumu, masaüstü kısayolu |
+| Güncelleme | Panel → **Ayarlar → Hakkında & Güncelleme** | Yeni sürüm/hata düzeltmelerini denetler, otomatik kurar. |
 
 ## Taşınabilir paketi üretmek (geliştirici PC)
 
@@ -27,7 +28,25 @@ powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1
 
 Hedef PC’de **`Personel26-Baslat.bat`** çalıştırın. İlk açılışta veritabanı otomatik kurulur; tarayıcı `http://127.0.0.1:3210` adresini açar. Durdurmak için `Personel26-Durdur.bat`.
 
-Verileriniz `data\` klasöründedir. Yedek = bu klasörü kopyalamak.
+Verileriniz `data\` klasöründedir; SQL yedekleri kurulum klasöründeki `backups\` dizininde toplanır (son 7 gün saklanır). Durdurma sırasında son bir yedek otomatik alınır. Tüm kurulumu taşımak için `data\` ve `backups\` klasörlerini birlikte kopyalayın.
+
+## Kurulum dosyasını (.exe) üretmek
+
+Inno Setup 6 kurulu olmalı. Taşınabilir paket henüz yoksa betik onu da üretir:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\kurulum-olustur.ps1
+```
+
+Çıktı: `windows\Personel26-Kurulum.exe`. Sürüm numarası `package.json` dosyasından
+okunur; ayrıca bir yerde güncellemeniz gerekmez.
+
+## Güncellemeler
+
+Windows kurulumunda güncellemeler uygulamanın içinden yapılır: **Ayarlar → Hakkında &
+Güncelleme → Güncellemeleri denetle**. Yeni sürüm varsa (ara sürümler atlanarak) tek
+tıkla kurulur; önce SQL güvenlik yedeği alınır, sorun çıkarsa önceki sürüme dönülür.
+Ayrıntılar ve yeni sürüm yayınlama adımları: **[GUNCELLEME.md](GUNCELLEME.md)**.
 
 ## GitHub’dan web sitesi olarak yayınlama
 

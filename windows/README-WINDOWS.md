@@ -1,4 +1,7 @@
-# Personel26 — Windows 1.1.0
+# Personel26 — Windows kurulumu
+
+Kurulu sürüm numarası panelde **Ayarlar → Hakkında** bölümünde görünür; tek kaynak
+proje kökündeki `package.json` dosyasıdır.
 
 ## Son kullanıcı
 
@@ -6,8 +9,10 @@ Node.js ve PostgreSQL ayrıca kurulmaz: paket kendi Windows x64 çalıştırıc�
 
 - **Personel26-Baslat.bat**: veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu başlatır ve tarayıcıyı açar.
 - **Personel26-Durdur.bat**: sadece paketin PID dosyasındaki, yolu doğrulanmış Node sürecini ve kendi PostgreSQL kümesini kapatır. Diğer Node uygulamalarını kapatmaz.
-- **Personel26-Yedekle.bat**: `data/backups` içine yerel PostgreSQL SQL yedeği oluşturur.
-- Panelde **Ayarlar → Yedekleme & Veritabanı**: JSON yedeği, SQL dışa aktarma, doğrulanmış dosyadan geri yükleme ve şema güncelleme.
+- **Personel26-Yedekle.bat**: kurulum klasöründeki `backups` dizinine yerel PostgreSQL SQL yedeği oluşturur.
+- Panelde **Ayarlar → Yedekleme & Veritabanı**: yedek klasörü yolu, elle yedek, klasörü açma, JSON yedeği, SQL dışa aktarma, doğrulanmış dosyadan geri yükleme ve şema güncelleme.
+- Program **Durdur** kısayoluyla kapatılırken son bir SQL yedeği otomatik alınır. Panel açıkken sekme kapatılırsa da 15 dakikada en fazla bir kapanış yedeği istenir.
+- Yedekler bugün dahil son **7 gün** saklanır; daha eski `personel26-*.sql` dosyaları yedek alınırken temizlenir.
 
 Adres: `http://127.0.0.1:3210`. PostgreSQL yalnızca `127.0.0.1:5433` üzerinde dinler. İlk kurulumda rastgele veritabanı parolası üretilir ve mevcut kullanıcıya özel izinlerle `data/connection.json` içinde saklanır. Bu dosyayı paylaşmayın.
 
@@ -26,13 +31,30 @@ SQL geri yükleme (uygulama klasöründe PowerShell):
 
 ## Güncelleme
 
-Önce tüm dosyalarınızı ve `data` klasörünü harici diske yedekleyin. Yeni kurulum dosyası mevcut aynı kullanıcı klasörüne kurulduğunda `data` klasörü korunur. Uygulama yeniden başlatıldığında `schema-update.sql` uygulanır.
+Kurulum ve taşınabilir pakette güncellemeler uygulamanın içinden yapılır:
+**Ayarlar → Hakkında & Güncelleme → Güncellemeleri denetle**.
 
-Alternatif olarak yeni portable klasörünü kullanın:
+- Yeni sürüm veya hata düzeltmesi varsa notlar gösterilir; ara sürümler atlanarak
+doğrudan en son sürüme geçilir.
+- Paket HTTPS üzerinden indirilir ve `update.json` içindeki SHA-256 özetiyle doğrulanır.
+- Dosyalar değişmeden önce SQL güvenlik yedeği kurulum klasöründeki `backups` dizinine alınır.
+- Uygulama yeniden başlatılır, sağlık kontrolü yapılır; başarısız olursa önceki sürüm
+ve veriler geri yüklenir. Ayrıntılı günlük: `data/updates/update.log`.
+
+Güncelleme için internet bağlantısı gerekir. Verileriniz `data` klasöründe kalır ve
+güncelleme sırasında silinmez; yine de harici disk yedeği önerilir.
+
+İnternet olmadan güncellemek için yeni taşınabilir klasörü elle uygulayabilirsiniz
+(önce `data` klasörünü yedekleyin):
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\Personel26-Yonet.ps1 -Action Update -PackagePath "D:\YeniSurum\Personel26-Portable"`
 
-Bu akış SQL güvenlik yedeği alır, yalnızca uygulamayı değiştirir ve sağlık kontrolü yapar. Başlatma başarısızsa eski uygulama klasörü geri alınır. Bu güncelleme PostgreSQL ana sürümünü değiştirmez; 16→17 gibi geçişler ayrıca `pg_upgrade` / yedekten taşıma ile planlanmalıdır. Kaldırma sırasında `data` klasörü otomatik silinmez.
+Bu akış SQL güvenlik yedeği alır, yalnızca uygulamayı değiştirir ve sağlık kontrolü
+yapar. Başlatma başarısızsa eski uygulama klasörü geri alınır. Güncelleme PostgreSQL
+ana sürümünü değiştirmez; 16→17 gibi geçişler ayrıca `pg_upgrade` / yedekten taşıma
+ile planlanmalıdır. Kaldırma sırasında `data` klasörü otomatik silinmez.
+
+Yeni sürüm yayınlama adımları: depo kökündeki **[GUNCELLEME.md](../GUNCELLEME.md)**.
 
 ## Paket üretimi
 
@@ -46,7 +68,7 @@ Paketleyici tip üretimi, TypeScript ve üretim derlemesini kontrol eder; sabitl
 
 `.github/workflows/windows-test.yml` main push, pull request ve elle tetikleme için hazırdır. Ayrı paketleme job'u çalışır; Windows 2022 ve 2025 job'larında **setup-node yoktur**. PATH yalnızca Windows sistem klasörleri ile sınırlandırılır, kurulu PostgreSQL servisleri durdurulur. Çalışan Node/PostgreSQL'in paket içinden geldiği doğrulanır.
 
-Test senaryoları: sessiz kurulum, ilk açılış, gerçek veritabanı sağlık kontrolü, şema sürümü, SQL yedek/geri yükleme, başka Node süreçlerinin korunması, kapatma, yeniden açma, veri koruyan uygulama güncellemesi ve üzerine yeniden kurulum. Raporlar ve loglar Actions artifact'ine yazılır; parola dosyası ve SQL yedeği yüklenmez.
+Test senaryoları: sessiz kurulum, `backups` dizini, ilk açılış, gerçek veritabanı sağlık kontrolü, şema sürümü, SQL yedek/geri yükleme, kapanışta otomatik yedek, başka Node süreçlerinin korunması, kapatma, yeniden açma, veri koruyan uygulama güncellemesi ve üzerine yeniden kurulum. Raporlar ve loglar Actions artifact'ine yazılır; parola dosyası ve SQL yedeği yüklenmez.
 
 **Durum:** Bu geliştirme ortamı Linux'tur. Windows job'ları burada çalıştırılmadı ve başarılı oldukları iddia edilmez. Değişiklikleri GitHub'a gönderdikten sonra gerçek Actions sonuçlarını inceleyin. GitHub-hosted runner tam temiz son kullanıcı Windows'u değildir; PATH izolasyonu sistem araçlarına bağımlılığı test eder. Son dağıtım onayı için temiz Windows 10/11 sanal veya fiziksel makinede standart kullanıcı, Visual C++ çalışma zamanı, antivirüs/SmartScreen, çevrimdışı başlatma ve port çakışması kontrollerini ayrıca yapın.
 

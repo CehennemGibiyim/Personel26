@@ -23,6 +23,9 @@ function Get-WebWithRetry {
   }
 }
 $Root = Split-Path -Parent $PSScriptRoot
+# Surumun tek kaynagi package.json'dir; kurulum dosyasi da ayni degeri kullanir.
+$AppVersion = (Get-Content (Join-Path $Root 'package.json') -Raw | ConvertFrom-Json).version
+if (-not $AppVersion) { throw 'package.json icinde surum numarasi bulunamadi.' }
 $Out = Join-Path $Root 'Personel26-Portable'
 $Cache = Join-Path $Root '.paket-cache'
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
@@ -73,9 +76,9 @@ Copy-Item (Get-ChildItem "$NodeTmp\*\node.exe").FullName "$Out\node\node.exe"
 Expand-Archive $PgZip -DestinationPath $PgTmp
 New-Item -ItemType Directory -Force -Path "$Out\pgsql" | Out-Null
 foreach ($dir in @('bin','lib','share')) { Copy-Item "$PgTmp\pgsql\$dir" "$Out\pgsql\$dir" -Recurse -Force }
-foreach ($file in @('Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','Personel26-Yonet.ps1','schema.sql','schema-update.sql')) { Copy-Item (Join-Path $PSScriptRoot $file) $Out -Force }
+foreach ($file in @('Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','Personel26-Yonet.ps1','Personel26-Guncelle.ps1','schema.sql','schema-update.sql')) { Copy-Item (Join-Path $PSScriptRoot $file) $Out -Force }
 Copy-Item (Join-Path $PSScriptRoot 'README-WINDOWS.md') (Join-Path $Out 'BENIOKU.md')
-@{ application='1.1.0'; schema='2026.01'; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
+@{ application=$AppVersion; schema='2026.01'; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
 if (-not $NoZip) {
   $Zip = Join-Path $Root 'Personel26-Portable.zip'
   if (Test-Path $Zip) { Remove-Item $Zip -Force }
