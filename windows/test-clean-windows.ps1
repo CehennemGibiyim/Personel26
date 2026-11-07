@@ -21,7 +21,14 @@ function Manager([string]$Mode,[string[]]$More=@()) {
 function Api([string]$Path,[string]$Method='GET',$Body=$null) {
   $args = @{ Uri="http://127.0.0.1:3210$Path"; Method=$Method; TimeoutSec=60 }
   if ($null -ne $Body) { $args.ContentType='application/json; charset=utf-8'; $args.Body=[Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Depth 20)) }
-  return Invoke-RestMethod @args
+  try {
+    return Invoke-RestMethod @args
+  } catch {
+    # Sunucunun Turkce hata mesajini test raporuna tasi.
+    $detail = $_.ErrorDetails.Message
+    if (-not $detail) { $detail = $_.Exception.Message }
+    throw "API $Method $Path basarisiz: $detail"
+  }
 }
 try {
   $Installer = (Get-ChildItem $DistributionPath -Recurse -Filter 'Personel26-Kurulum.exe' | Select-Object -First 1).FullName

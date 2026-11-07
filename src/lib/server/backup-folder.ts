@@ -174,7 +174,8 @@ function pgConnection(): PgConnection {
   if (!existsSync(file)) throw new Error("Veritabanı bağlantı ayarları bulunamadı.");
   let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+    // Windows PowerShell 5.1 UTF-8 dosyalarina BOM ekler; JSON.parse BOM kabul etmez.
+    raw = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) as Record<string, unknown>;
   } catch {
     throw new Error("Veritabanı bağlantı ayarları okunamadı.");
   }

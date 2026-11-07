@@ -108,7 +108,8 @@ function isSafeUrl(url: URL): boolean {
 function readJson<T>(file: string | null): T | null {
   if (!file || !existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(file, "utf8")) as T;
+    // Windows PowerShell 5.1 UTF-8 dosyalarina BOM ekler; JSON.parse BOM kabul etmez.
+    return JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) as T;
   } catch {
     return null;
   }
