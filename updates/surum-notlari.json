@@ -1,6 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.6.0",
+      "kind": "feature",
+      "title": "StockManager ile aynı Electron kabuğu, Alt+Enter tam ekran ve değişiklik anında yedek",
+      "date": "2026-11-08",
+      "notes": [
+        "Personel26 artık StockManager ile aynı Electron masaüstü kabuğunda çalışır; tarayıcı, WebView2 veya adres çubuğu kullanılmaz.",
+        "Alt+Enter ve F11 tam ekranı açar/kapatır; Esc tam ekrandan çıkarır. Paneldeki tam ekran düğmesi de korunur.",
+        "Pencere kapatıldığında sunucu güvenli biçimde durdurulur ve kapanış SQL yedeği backups klasörüne yazılır.",
+        "Personel veya servis eklendiğinde/güncellendiğinde, yanıt bekletilmeden kısa süre içinde otomatik SQL yedeği alınır.",
+        "Kurulum kısayolları doğrudan Personel26.exe dosyasını açar; eski .bat dosyaları da tarayıcı yerine aynı exe'yi çalıştırır.",
+        "Uygulama içi güncelleme yeni Electron kabuğunu ve resources/app dosyalarını da yükler; hata olursa önceki kabuk geri alınır.",
+        "Personel sorgu, arayüz index.html indirme ve JSON/SQL yedek taşıma akışları korunur."
+      ]
+    },
+    {
       "version": "1.5.0",
       "kind": "feature",
       "title": "Kendi penceresinde Personel26.exe, sabit sol menü ve taşınabilir yedek",

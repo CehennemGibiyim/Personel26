@@ -9,6 +9,17 @@ $Package = Join-Path $TempRoot 'Personel26 update source'
 $PowerShell = (Get-Command powershell.exe).Source
 $PreviousPath = $env:PATH
 $UnrelatedProcess = $null
+function Backup-Count {
+  @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count
+}
+function Wait-Backup([int]$AtLeast,[int]$Seconds=45) {
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  while ((Get-Date) -lt $deadline) {
+    if ((Backup-Count) -ge $AtLeast) { return $true }
+    Start-Sleep -Milliseconds 750
+  }
+  return ((Backup-Count) -ge $AtLeast)
+}
 function Assert-Check([string]$Name,[bool]$Condition) {
   $Checks.Add(@{ name=$Name; passed=$Condition; time=(Get-Date).ToUniversalTime().ToString('o') })
   if (-not $Condition) { throw "TEST BASARISIZ: $Name" }
@@ -58,17 +69,17 @@ try {
   Assert-Check 'Sistem PostgreSQL kullanilmiyor' (-not (Get-Command psql.exe -ErrorAction SilentlyContinue))
   # Masaustu kisayolunun gercek hedefi: ikonlu Personel26.exe. .bat degil.
   $Launcher = Join-Path $Target 'Personel26.exe'
-  Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 20000))
-  Assert-Check 'Gomulu WebView2 bilesenleri paketlendi' (
-    (Test-Path (Join-Path $Target 'Microsoft.Web.WebView2.Core.dll')) -and
-    (Test-Path (Join-Path $Target 'Microsoft.Web.WebView2.WinForms.dll')) -and
-    (Test-Path (Join-Path $Target 'WebView2Loader.dll'))
+  Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 50MB))
+  Assert-Check 'Electron masaustu kabugu paketlendi' (
+    (Test-Path (Join-Path $Target 'resources\app\main.cjs')) -and
+    (Test-Path (Join-Path $Target 'resources\app\package.json')) -and
+    ((Get-Item $Launcher).VersionInfo.ProductName -eq 'Personel26')
   )
   $launchCode = Run-Launcher -Arguments @('--start-only') -TimeoutSeconds 300
   Assert-Check 'Personel26.exe ile baslatma' ($launchCode -eq 0)
   Assert-Check 'Ilk baslatma ve gercek veritabani saglik kontrolu' ((Api '/api/health').ok -eq $true)
-  $webViewCode = Run-Launcher -Arguments @('--webview-test') -TimeoutSeconds 120
-  Assert-Check 'Personel26 kendi WebView2 penceresinde aciliyor' ($webViewCode -eq 0)
+  $desktopCode = Run-Launcher -Arguments @('--desktop-test') -TimeoutSeconds 120
+  Assert-Check 'Personel26 kendi Electron penceresinde aciliyor' ($desktopCode -eq 0)
   $boot = Api '/api/bootstrap'
   Assert-Check 'Sema ve ornek veri kurulumu' ($boot.departments.Count -gt 0 -and $boot.personnel.Count -gt 0)
   $status = Api '/api/settings'
@@ -79,12 +90,18 @@ try {
   $settings = $status.settings
   $settings.institution = 'CI KURUM KAYDI KORUNDU'
   Api '/api/settings' 'PUT' $settings | Out-Null
+  $backupBeforePerson = Backup-Count
   $person = Api '/api/personnel' 'POST' @{ name='CI TEST PERSONEL'; tcNo='11111111110'; personnelType='ISCI'; staffGroup='DESTEK'; departmentIds=@($boot.departments[0].id) }
   $Id = $person.personnel.id
+  Assert-Check 'Personel ekleme sonrasi otomatik SQL yedegi' (Wait-Backup ($backupBeforePerson + 1) 45)
+  $backupBeforeDept = Backup-Count
+  $newDept = Api '/api/departments' 'POST' @{ name=('CI SERVIS ' + (Get-Date -Format 'HHmmss')) }
+  Assert-Check 'Yeni servis eklendi' ($newDept.department.name -like 'CI SERVIS*')
+  Assert-Check 'Servis ekleme sonrasi otomatik SQL yedegi' (Wait-Backup ($backupBeforeDept + 1) 45)
   $Before = (Api '/api/personnel').personnel.Count
-  $exeBackupBefore = @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count
+  $exeBackupBefore = Backup-Count
   $exeBackupCode = Run-Launcher -Arguments @('--backup','--quiet') -TimeoutSeconds 180
-  Assert-Check 'Personel26.exe ile yedek alma' ($exeBackupCode -eq 0 -and @(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt $exeBackupBefore)
+  Assert-Check 'Personel26.exe ile yedek alma' ($exeBackupCode -eq 0 -and (Backup-Count) -gt $exeBackupBefore)
   $Backup = Join-Path $TempRoot 'personel26-ci-roundtrip.sql'
   Manager 'Backup' @('-BackupFile',$Backup)
   Assert-Check 'SQL yedek dosyasi olusturuldu' ((Test-Path $Backup) -and (Get-Item $Backup).Length -gt 100)
@@ -105,7 +122,7 @@ try {
   Copy-Item (Join-Path $Target 'node\node.exe') (Join-Path $Other 'node.exe') -Force
   $UnrelatedProcess = Start-Process (Join-Path $Other 'node.exe') -ArgumentList @('-e','setInterval(()=>{},1000)') -PassThru -WindowStyle Hidden
   Manager 'Stop'
-  Assert-Check 'Kapanmadan once otomatik SQL yedegi' (@(Get-ChildItem (Join-Path $Target 'backups') -Filter 'personel26-*.sql' -ErrorAction SilentlyContinue).Count -gt 0)
+  Assert-Check 'Kapanmadan once otomatik SQL yedegi' ((Backup-Count) -gt 0)
   Assert-Check 'Yalnizca Personel26 sureci kapatildi' ($null -ne (Get-Process -Id $UnrelatedProcess.Id -ErrorAction SilentlyContinue))
   Assert-Check 'Runtime PID temizlendi' (-not (Test-Path (Join-Path $Target 'data\runtime.json')))
   $healthAfterStop = $false
@@ -157,7 +174,7 @@ try {
   $env:PATH = $PreviousPath
   # Baglanti sifresi ve SQL yedegi artifact'e alinmaz; yalnizca test/loglar.
   $Checks | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $ReportDir 'report.json') -Encoding UTF8
-  foreach ($log in @('app.log','app-error.log','postgres.log','launcher.log')) {
+  foreach ($log in @('app.log','app-error.log','postgres.log','electron.log')) {
     $source = Join-Path $Target "data\$log"
     if (Test-Path $source) { Copy-Item $source $ReportDir -Force }
   }

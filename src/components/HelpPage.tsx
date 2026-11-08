@@ -122,7 +122,7 @@ const SCREENS = [
 const FAQ = [
   {
     q: "Personel26.exe açılmıyor, ne yapmalıyım?",
-    a: "Önce masaüstündeki Personel26 simgesini bir kez daha aç. “WebView2 gerekli” uyarısı çıkarsa Microsoft Edge WebView2 Runtime’ı kur; Windows 10/11’de genellikle hazırdır. Pencere “başlatılıyor” deyip kapanıyorsa data\\app-error.log, data\\launcher.log ve data\\app.log dosyalarına bak. Kurulum klasörünü taşıdıysan simgeyi yeni klasördeki Personel26.exe ile yenile.",
+    a: "Önce masaüstündeki Personel26 simgesini bir kez daha aç. Pencere “başlatılıyor” deyip kapanıyorsa data\\app-error.log, data\\electron.log ve data\\app.log dosyalarına bak. Kurulum klasörünü taşıdıysan simgeyi yeni klasördeki Personel26.exe ile yenile. Sorun sürerse kurulumu yeniden çalıştır.",
   },
   {
     q: "Windows “bilinmeyen yayıncı” uyarısı veriyor",
@@ -134,7 +134,7 @@ const FAQ = [
   },
   {
     q: "Uygulamayı nasıl kapatırım?",
-    a: "Başlat menüsündeki “Personel26 — Durdur” kısayolunu kullan. Kapanmadan önce otomatik SQL yedeği alınır. Pencereyi kapatmak sunucuyu durdurmaz; bir sonraki açılışta panel yine hazır olur.",
+    a: "Başlat menüsündeki “Personel26 — Durdur” kısayolunu kullan veya pencereyi kapat. Kapanmadan önce otomatik SQL yedeği alınır ve sunucu güvenli biçimde durdurulur. Bir sonraki açılışta panel yine hazır olur.",
   },
   {
     q: "Güncelleme nasıl yapılır?",
@@ -247,7 +247,7 @@ export default function HelpPage() {
             {[
               ["Kurulumu başlat", "Personel26-Kurulum.exe dosyasını çalıştır. Kurulum tamamlanınca masaüstünde Personel26 simgesi oluşur."],
               ["Simgeye çift tıkla", "Kısa bir “Personel26 başlatılıyor” penceresi görünür. İlk açılışta yerel veritabanı hazırlanır; 1-2 dakika sürebilir."],
-              ["Panel açılır", "Panel, Personel26’nın kendi penceresinde açılır. Adres çubuğu, sekme ve localhost adresi görünmez; F11 ile tam ekran yapılabilir."],
+              ["Panel açılır", "Panel, Personel26’nın kendi Electron penceresinde açılır. Adres çubuğu, sekme ve localhost adresi görünmez; Alt+Enter veya F11 ile tam ekran yapılabilir."],
               ["Kapatırken yedek alınır", "Başlat menüsünde “Personel26 — Durdur” kısayolu vardır. Kapatmadan önce SQL yedeği backups klasörüne yazılır."],
             ].map(([title, text], i) => <li key={title} className="flex gap-3">
               <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[10px] font-black text-sky-300 ring-1 ring-sky-400/30">{i + 1}</span>

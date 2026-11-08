@@ -3,6 +3,7 @@ import { personnel, personnelDepartments, departments } from "@/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { isValidPersonnelType, parseStaffGroup, suggestedGroupForTitle } from "@/lib/shared";
 import { personnelListColumns, toClientPersonnel } from "@/lib/server/core";
+import { scheduleMutationBackup } from "@/lib/server/auto-backup";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export async function POST(req: Request) {
       ...(parseAvatar(body.avatar) ?? {}),
     }).returning(personnelListColumns);
     await setAssignments(rows[0].id, deptIds);
+    scheduleMutationBackup();
     return Response.json({ personnel: { ...toClientPersonnel(rows[0]), departmentIds: deptIds } });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Hata" }, { status: 500 });
@@ -120,6 +122,7 @@ export async function PATCH(req: Request) {
     const rows = await db.update(personnel).set(patch).where(eq(personnel.id, id)).returning(personnelListColumns);
     if (!rows[0]) return Response.json({ error: "Personel bulunamadı" }, { status: 404 });
     const assignments = await db.select().from(personnelDepartments).where(eq(personnelDepartments.personnelId, id));
+    scheduleMutationBackup();
     return Response.json({
       personnel: { ...toClientPersonnel(rows[0]), departmentIds: assignments.map(a => a.departmentId) },
     });
