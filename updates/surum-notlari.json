@@ -1,6 +1,22 @@
 {
   "releases": [
     {
+      "version": "1.5.0",
+      "kind": "feature",
+      "title": "Kendi penceresinde Personel26.exe, sabit sol menü ve taşınabilir yedek",
+      "date": "2026-11-08",
+      "notes": [
+        "Panel artık tarayıcı veya localhost penceresi yerine Personel26’nın kendi gömülü WebView2 penceresinde açılır; adres çubuğu ve sekme görünmez.",
+        "F11 ve paneldeki tam ekran düğmesiyle tam ekran kullanım; masaüstü ve Başlat kısayolları doğrudan Personel26.exe dosyasını açar.",
+        "Sol menü uzun sayfalarda sabit kalır; menü kendi içinde kayar ve sayfa sonuna kadar uzamaz.",
+        "Yardım bölümüne geri bildirim, web sitesi, telefon, e-posta ve WhatsApp iletişim kartları eklendi; WhatsApp uygulaması yoksa web WhatsApp açılır.",
+        "Yedekleme bölümüne başka bilgisayardan JSON yedeği taşıma, önizleme ve yazılı GERİ YÜKLE onayı eklendi.",
+        "Yeni uçtan uca test: servis, şablon, fotoğraflı personel, nöbet ve puantaj oluşturup yedeği tüm veritabanını sıfırlayarak geri yükler ve tekrarlı okumalarda verinin sıfırlanmadığını doğrular.",
+        "Personel sorgu ekranı uygulama içinde açılır; arayüz index.html olarak indirme akışı korunur.",
+        "Kurulum ve güncelleme akışı WebView2 bileşenlerini pakete dahil eder; eksik çalışma zamanında tarayıcıya düşmek yerine açıklayıcı uyarı gösterir."
+      ]
+    },
+    {
       "version": "1.4.0",
       "kind": "feature",
       "title": "İkonlu Personel26.exe, görsel yardım merkezi ve tek tıkla geri yükleme",

@@ -59,9 +59,16 @@ try {
   # Masaustu kisayolunun gercek hedefi: ikonlu Personel26.exe. .bat degil.
   $Launcher = Join-Path $Target 'Personel26.exe'
   Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 20000))
+  Assert-Check 'Gomulu WebView2 bilesenleri paketlendi' (
+    (Test-Path (Join-Path $Target 'Microsoft.Web.WebView2.Core.dll')) -and
+    (Test-Path (Join-Path $Target 'Microsoft.Web.WebView2.WinForms.dll')) -and
+    (Test-Path (Join-Path $Target 'WebView2Loader.dll'))
+  )
   $launchCode = Run-Launcher -Arguments @('--start-only') -TimeoutSeconds 300
   Assert-Check 'Personel26.exe ile baslatma' ($launchCode -eq 0)
   Assert-Check 'Ilk baslatma ve gercek veritabani saglik kontrolu' ((Api '/api/health').ok -eq $true)
+  $webViewCode = Run-Launcher -Arguments @('--webview-test') -TimeoutSeconds 120
+  Assert-Check 'Personel26 kendi WebView2 penceresinde aciliyor' ($webViewCode -eq 0)
   $boot = Api '/api/bootstrap'
   Assert-Check 'Sema ve ornek veri kurulumu' ($boot.departments.Count -gt 0 -and $boot.personnel.Count -gt 0)
   $status = Api '/api/settings'

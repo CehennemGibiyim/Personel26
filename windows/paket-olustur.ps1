@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1')
+param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1', [string]$WebViewVersion = '1.0.3485.44')
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
@@ -58,6 +58,24 @@ function Build-Launcher {
   )
   $csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
   if (-not $csc) { throw 'C# derleyicisi (csc.exe) bulunamadi. .NET Framework 4.x gerekli.' }
+
+  # WebView2, paneli tarayici/localhost adresi gostermeden kendi penceresinde
+  # acar. NuGet paketindeki yonetilen assembly'ler ve x64 loader pakete girer.
+  $webViewPackage = Join-Path $Cache "microsoft.web.webview2.$WebViewVersion.nupkg"
+  if (-not (Test-Path $webViewPackage)) {
+    Get-WebWithRetry "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$WebViewVersion" $webViewPackage
+  }
+  $webViewTmp = Join-Path $Cache 'webview2-extract'
+  if (Test-Path $webViewTmp) { Remove-Item $webViewTmp -Recurse -Force }
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [IO.Compression.ZipFile]::ExtractToDirectory($webViewPackage, $webViewTmp)
+  $webViewCore = Join-Path $webViewTmp 'lib\net462\Microsoft.Web.WebView2.Core.dll'
+  $webViewForms = Join-Path $webViewTmp 'lib\net462\Microsoft.Web.WebView2.WinForms.dll'
+  $webViewLoader = Join-Path $webViewTmp 'build\native\x64\WebView2Loader.dll'
+  foreach ($file in @($webViewCore, $webViewForms, $webViewLoader)) {
+    if (-not (Test-Path $file)) { throw "WebView2 paket dosyasi bulunamadi: $file" }
+  }
+
   $build = Join-Path $env:TEMP ('p26-launcher-' + [guid]::NewGuid().ToString('N'))
   New-Item -ItemType Directory -Force -Path $build | Out-Null
   try {
@@ -70,11 +88,14 @@ function Build-Launcher {
     [IO.File]::WriteAllText($versionSource, $versionCode, (New-Object System.Text.UTF8Encoding($false)))
     Push-Location $build
     try {
-      & $csc /nologo /target:winexe /platform:anycpu /optimize+ /debug- /out:Personel26.exe /win32icon:personel26.ico /win32manifest:Personel26.exe.manifest /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll Personel26Launcher.cs Personel26Launcher.version.cs
+      & $csc /nologo /target:winexe /platform:x64 /optimize+ /debug- /out:Personel26.exe /win32icon:personel26.ico /win32manifest:Personel26.exe.manifest /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll "/r:$webViewCore" "/r:$webViewForms" Personel26Launcher.cs Personel26Launcher.version.cs
       if ($LASTEXITCODE -ne 0) { throw "Baslatici exe derlemesi basarisiz (kod $LASTEXITCODE)." }
     } finally { Pop-Location }
     Copy-Item (Join-Path $build 'Personel26.exe') (Join-Path $Out 'Personel26.exe') -Force
     Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') (Join-Path $Out 'personel26.ico') -Force
+    Copy-Item $webViewCore $Out -Force
+    Copy-Item $webViewForms $Out -Force
+    Copy-Item $webViewLoader $Out -Force
   } finally {
     Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue
   }

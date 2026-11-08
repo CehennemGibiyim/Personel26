@@ -45,6 +45,7 @@ jobs:
           for i in $(seq 1 60); do curl -fsS http://127.0.0.1:3000/api/health && break || sleep 1; done
           curl -fsS -X POST http://127.0.0.1:3000/api/database -H 'Content-Type: application/json' -d '{"action":"update","confirm":"GÜNCELLE"}'
           node scripts/test-settings-api.mjs
+          node scripts/test-backup-roundtrip.mjs
           node scripts/test-settings-browser.mjs
       - name: GitHub Pages veritabani koprusu
         run: node scripts/pages-smoke-test.mjs

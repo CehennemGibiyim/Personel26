@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   HardDriveDownload, RefreshCw, Download, RotateCcw, DatabaseBackup, CheckCircle2,
-  AlertTriangle, FileJson, ShieldCheck,
+  AlertTriangle, FileJson, ShieldCheck, Upload, Loader2, X,
 } from "lucide-react";
-import { Btn, Spinner, EmptyState, Badge, cx } from "@/components/ui-kit";
+import { Btn, Spinner, EmptyState, Badge, Modal, cx } from "@/components/ui-kit";
 import { downloadFromApi, lastBackupDownload } from "@/lib/download";
 import LocalBackupCard from "@/components/LocalBackupCard";
 
@@ -37,6 +37,9 @@ export default function BackupPage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [lastDl, setLastDl] = useState<Date | null>(null);
+  const [imported, setImported] = useState<{ name: string; data: unknown; counts: Record<string, number> } | null>(null);
+  const [confirm, setConfirm] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => { setLastDl(lastBackupDownload()); }, []);
 
   async function load() {
@@ -71,7 +74,7 @@ export default function BackupPage() {
   }
 
   async function restore(b: BackupRow) {
-    if (!confirm(`"${b.filename}" geri yüklenecek. Mevcut tüm veriler bu yedekle değiştirilecek (önce otomatik güvenlik yedeği alınır). Devam?`)) return;
+    if (!window.confirm(`"${b.filename}" geri yüklenecek. Mevcut tüm veriler bu yedekle değiştirilecek (önce otomatik güvenlik yedeği alınır). Devam?`)) return;
     setBusy(true); setMsg(""); setErr("");
     try {
       const res = await fetch(`/api/backup/${b.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirm: "GERİ YÜKLE" }) });
@@ -82,9 +85,72 @@ export default function BackupPage() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Geri yükleme başarısız"); setBusy(false); }
   }
 
+  /** Başka bilgisayardan indirilen JSON yedeğini doğrular ve geri yüklemeye hazırlar. */
+  async function readBackupFile(file: File) {
+    setBusy(true); setMsg(""); setErr("");
+    try {
+      if (!/\.json$/i.test(file.name)) throw new Error("Lütfen panelden indirilen Personel26 JSON yedeğini seçin.");
+      if (file.size > 30 * 1024 * 1024) throw new Error("Yedek dosyası en fazla 30 MB olabilir.");
+      const input = JSON.parse(await file.text());
+      const res = await fetch("/api/database", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview", data: input }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Yedek dosyası doğrulanamadı.");
+      setConfirm("");
+      setImported({ name: file.name, data: input, counts: data.counts ?? {} });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Yedek dosyası okunamadı");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function restoreImported() {
+    if (!imported || confirm !== "GERİ YÜKLE") return;
+    setBusy(true); setMsg(""); setErr("");
+    try {
+      const res = await fetch("/api/database", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore", data: imported.data, confirm }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Geri yükleme başarısız");
+      setImported(null);
+      setMsg("Geri yükleme tamamlandı. Tüm personel, nöbet, puantaj ve ayarlar geri getirildi. Sayfa yenileniyor…");
+      setTimeout(() => window.location.reload(), 1400);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Geri yükleme başarısız");
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <LocalBackupCard notify={(message, error) => { if (error) { setErr(message); setMsg(""); } else { setMsg(message); setErr(""); } }} />
+      <div className="panel p-4 flex flex-wrap items-center gap-3 border-violet-400/20 bg-violet-500/[.045]">
+        <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/25"><Upload className="w-5 h-5" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-bold text-white">Başka bilgisayardan yedek taşıma</div>
+          <div className="mt-0.5 text-[10.5px] leading-relaxed text-white/40">
+            Eski bilgisayarda Yedekleme → bir yedeğin <b className="text-white/65">İndir</b> düğmesine basın. Bu bilgisayarda aşağıdan JSON dosyasını seçin; önce önizleme, sonra açık onayla geri yükleme yapılır.
+          </div>
+        </div>
+        <Btn small variant="primary" onClick={() => fileRef.current?.click()} disabled={busy}>
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Yedek dosyası seç
+        </Btn>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          onChange={event => { const file = event.target.files?.[0]; if (file) void readBackupFile(file); }}
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-bold text-white flex items-center gap-2" style={{ fontFamily: "var(--font-grotesk)" }}>
           <DatabaseBackup className="w-4 h-4 text-emerald-400" /> Yedekleme
@@ -168,6 +234,43 @@ export default function BackupPage() {
             );
           })}
         </div>
+      )}
+
+      {imported && (
+        <Modal
+          title="Yedek dosyasını geri yükle"
+          icon={<RotateCcw className="w-4 h-4 text-amber-300" />}
+          onClose={() => { if (!busy) setImported(null); }}
+        >
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-400/[.08] p-3 text-[11px] leading-relaxed text-amber-100/80">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <p>Mevcut veriler bu yedekle değiştirilecek. İşlem öncesinde otomatik güvenlik yedeği alınır; yanlış dosya seçtiyseniz geri dönebilirsiniz.</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[.04] p-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-white"><FileJson className="h-4 w-4 text-violet-300" /> {imported.name}</div>
+              <div className="mt-1 text-[10.5px] text-white/40">
+                {imported.counts.personnel ?? 0} personel · {imported.counts.departments ?? 0} servis · {imported.counts.shift_schedules ?? 0} nöbet · {imported.counts.timesheet_entries ?? 0} puantaj · {imported.counts.shift_templates ?? 0} şablon
+              </div>
+            </div>
+            <label className="block text-[12px] text-white/60">
+              Onaylamak için <b className="text-white">GERİ YÜKLE</b> yazın
+              <input
+                autoFocus
+                value={confirm}
+                onChange={event => setConfirm(event.target.value)}
+                placeholder="GERİ YÜKLE"
+                className="mt-1.5 w-full rounded-lg border border-white/15 bg-white/[.06] px-3 py-2 text-xs text-white outline-none focus:border-amber-400/60"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <Btn small onClick={() => setImported(null)} disabled={busy}><X className="w-3.5 h-3.5" /> Vazgeç</Btn>
+              <Btn small variant="amber" onClick={restoreImported} disabled={busy || confirm !== "GERİ YÜKLE"}>
+                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />} Güvenle geri yükle
+              </Btn>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

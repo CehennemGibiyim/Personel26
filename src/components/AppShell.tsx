@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Wrench, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole, Banknote, CircleHelp,
+  ChevronDown, ClipboardList, CalendarClock, LayoutTemplate, CalendarDays, Repeat, Users, Scale, ShieldAlert, Megaphone, DatabaseBackup, Menu, X, Building2, Plus, Fingerprint, HeartPulse, MonitorDown, Stethoscope, SprayCan, Wrench, Pencil, Trash2, Check, Settings2, Ellipsis, Database, LockKeyhole, Banknote, CircleHelp, Maximize2, Minimize2,
 } from "lucide-react";
 import type { Department, Personnel, Holiday, ShiftTemplate, StaffGroup } from "@/lib/shared";
 import { staffGroupMeta, staffGroupOf, personnelInDepartment, listStaffGroups, setExtraGroups, makeCustomGroup, isCustomGroup, parseStaffGroup } from "@/lib/shared";
@@ -149,6 +149,20 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
     } catch {}
   }
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const sync = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      // Tarayıcı tam ekran izni vermezse kısayol/klavye yolu kullanılabilir.
+    }
+  }
   const [showDeptModal, setShowDeptModal] = useState<false | "add" | "edit">(false);
   const [deptOpen, setDeptOpen] = useState(false);
   const deptRef = useRef<HTMLDivElement | null>(null);
@@ -278,11 +292,20 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         {MONTH_PAGES.includes(page) && (
           <MonthNav year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m); }} />
         )}
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+          title={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+          className="p-2 rounded-lg bg-white/5 border border-white/10 text-white/55 hover:text-white transition"
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Kenar çubuğu */}
       <aside className={cx(
-        "fixed inset-y-0 left-0 z-50 w-[264px] bg-[#090e1b] border-r border-white/[.09] flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto",
+        "fixed inset-y-0 left-0 z-50 w-[264px] bg-[#090e1b] border-r border-white/[.09] flex flex-col transition-transform duration-300 lg:sticky lg:top-0 lg:bottom-auto lg:left-auto lg:z-auto lg:h-screen lg:translate-x-0 lg:overflow-hidden",
         sidebarOpen ? "translate-x-0 shadow-2xl shadow-black" : "-translate-x-full"
       )}>
         <div className="px-4 pt-5 pb-4 border-b border-white/[.08]">
@@ -298,7 +321,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
+        <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 py-3 space-y-0.5">
           <div className="shell-nav-label">ÇALIŞMA ALANI</div>
           {NAV.map(n => (
             <div key={n.key}>
@@ -330,7 +353,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
 
         {page !== "ayarlar" && <div className="px-3 py-3 border-t border-white/[.08] space-y-2">
           <Link
-            href="/personel" target="_blank"
+            href="/personel"
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/15 transition text-xs font-bold"
           >
             <Fingerprint className="w-4 h-4" />
@@ -346,7 +369,7 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
         </div>}
         {page === "ayarlar" && <div className="settings-sidebar-footer">
           <div className="sidebar-workspace"><Database size={16} /><div><b>Kurum çalışma alanı</b><small>{departments.length > 0 ? "PostgreSQL bağlantısı etkin" : "Bağlantı hazırlanıyor"}</small></div></div>
-          <div className="sidebar-user-card"><span className="user-avatar">YK</span><div><b>Yönetici</b><small>Kurum yönetimi</small></div><details className="sidebar-tools"><summary aria-label="Ek araçlar"><Ellipsis size={17} /></summary><div><Link href="/personel" target="_blank"><Fingerprint size={14} /> Personel sorgu ekranı</Link><PreviewDownloadButton /></div></details></div>
+          <div className="sidebar-user-card"><span className="user-avatar">YK</span><div><b>Yönetici</b><small>Kurum yönetimi</small></div><details className="sidebar-tools"><summary aria-label="Ek araçlar"><Ellipsis size={17} /></summary><div><Link href="/personel"><Fingerprint size={14} /> Personel sorgu ekranı</Link><PreviewDownloadButton /></div></details></div>
           <div className="sidebar-version"><LockKeyhole size={9} /> Kurum içi kullanım<span>v{APP_VERSION}</span></div>
         </div>}
       </aside>
@@ -425,6 +448,15 @@ export default function AppShell({ initialData }: { initialData?: BootstrapPaylo
               {MONTH_PAGES.includes(page) && (
                 <MonthNav year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m); }} />
               )}
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+                title={isFullscreen ? "Tam ekrandan çık" : "Tam ekran"}
+                className="p-2 rounded-lg bg-white/[.06] border border-white/10 text-white/50 hover:text-white hover:bg-white/10 transition"
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
             </div>
           </div>
         </header>}

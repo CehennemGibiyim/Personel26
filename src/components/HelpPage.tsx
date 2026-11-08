@@ -1,10 +1,49 @@
 "use client";
+import { useState } from "react";
 import {
-  ArrowRight, CalendarClock, CheckCircle2, CircleHelp, DatabaseBackup, Download, FileSpreadsheet,
-  FolderOpen, HardDrive, Image as ImageIcon, MonitorDown, MousePointerClick, PlayCircle, RefreshCw,
-  ShieldCheck, Sparkles, Users, Video, WifiOff,
+  ArrowRight, CalendarClock, Check, CheckCircle2, CircleHelp, Copy, DatabaseBackup, Download, FileSpreadsheet,
+  FolderOpen, Globe2, HardDrive, Image as ImageIcon, Mail, MessageCircle, MonitorDown, MousePointerClick, Phone, PlayCircle, RefreshCw,
+  Send, ShieldCheck, Sparkles, Users, Video, WifiOff,
 } from "lucide-react";
-import { APP_VERSION, INSTALLER_URL, REPOSITORY_URL, WEB_APP_URL } from "@/lib/app-info";
+import { APP_VERSION, INSTALLER_URL, WEB_APP_URL } from "@/lib/app-info";
+
+const CONTACT = {
+  website: "https://cehennemgibiyim.github.io",
+  phoneDisplay: "0535 831 74 54",
+  phoneHref: "tel:+905358317454",
+  email: "cehennemgibiyim@gmail.com",
+  whatsapp: "905358317454",
+};
+
+function feedbackBody(category: string, message: string): string {
+  return [
+    `Kategori: ${category}`,
+    "",
+    message.trim(),
+    "",
+    "---",
+    `Personel26 v${APP_VERSION}`,
+    `Tarih: ${new Date().toLocaleString("tr-TR")}`,
+    typeof navigator !== "undefined" ? `Tarayıcı: ${navigator.userAgent}` : "",
+  ].join("\n");
+}
+
+/** WhatsApp uygulamasını dener; açılmazsa web WhatsApp'a geçer. */
+function openWhatsApp(message: string) {
+  const text = encodeURIComponent(message);
+  const appUrl = `whatsapp://send?phone=${CONTACT.whatsapp}&text=${text}`;
+  const webUrl = `https://wa.me/${CONTACT.whatsapp}?text=${text}`;
+  let leftPage = false;
+  const markLeft = () => { leftPage = true; };
+  window.addEventListener("blur", markLeft, { once: true });
+  document.addEventListener("visibilitychange", markLeft, { once: true });
+  window.location.href = appUrl;
+  window.setTimeout(() => {
+    window.removeEventListener("blur", markLeft);
+    document.removeEventListener("visibilitychange", markLeft);
+    if (!leftPage && !document.hidden) window.location.assign(webUrl);
+  }, 1400);
+}
 
 const BASE_PATH = (process.env.NEXT_PUBLIC_P26_BASE_PATH ?? "").replace(/\/$/, "");
 const helpAsset = (file: string) => `${BASE_PATH}/help/${file}`;
@@ -83,7 +122,7 @@ const SCREENS = [
 const FAQ = [
   {
     q: "Personel26.exe açılmıyor, ne yapmalıyım?",
-    a: "Önce masaüstündeki Personel26 simgesini bir kez daha aç. Pencere “başlatılıyor” deyip kapanıyorsa data\\app-error.log ve data\\app.log dosyalarına bak. Kurulum klasörünü taşıdıysan simgeyi yeni klasördeki Personel26.exe ile yenile.",
+    a: "Önce masaüstündeki Personel26 simgesini bir kez daha aç. “WebView2 gerekli” uyarısı çıkarsa Microsoft Edge WebView2 Runtime’ı kur; Windows 10/11’de genellikle hazırdır. Pencere “başlatılıyor” deyip kapanıyorsa data\\app-error.log, data\\launcher.log ve data\\app.log dosyalarına bak. Kurulum klasörünü taşıdıysan simgeyi yeni klasördeki Personel26.exe ile yenile.",
   },
   {
     q: "Windows “bilinmeyen yayıncı” uyarısı veriyor",
@@ -116,6 +155,27 @@ const FAQ = [
 ];
 
 export default function HelpPage() {
+  const [category, setCategory] = useState("Fikir / öneri");
+  const [message, setMessage] = useState("");
+  const [copied, setCopied] = useState(false);
+  const canSend = message.trim().length >= 5;
+  const fullMessage = feedbackBody(category, message);
+
+  async function copyFeedback() {
+    try {
+      await navigator.clipboard.writeText(fullMessage);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      window.prompt("Geri bildirimi kopyalamak için metni seçin:", fullMessage);
+    }
+  }
+
+  function sendMail() {
+    const subject = encodeURIComponent(`Personel26 geri bildirim — ${category}`);
+    window.location.href = `mailto:${CONTACT.email}?subject=${subject}&body=${encodeURIComponent(fullMessage)}`;
+  }
+
   return <div className="px-4 sm:px-5 lg:px-8 py-6 max-w-[1240px] help-root">
     <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b1930] via-[#0b1220] to-[#1b1236] p-6 sm:p-8 lg:p-10">
       <div className="absolute -right-24 -top-28 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl" />
@@ -187,7 +247,7 @@ export default function HelpPage() {
             {[
               ["Kurulumu başlat", "Personel26-Kurulum.exe dosyasını çalıştır. Kurulum tamamlanınca masaüstünde Personel26 simgesi oluşur."],
               ["Simgeye çift tıkla", "Kısa bir “Personel26 başlatılıyor” penceresi görünür. İlk açılışta yerel veritabanı hazırlanır; 1-2 dakika sürebilir."],
-              ["Panel açılır", "Panel, Edge’in uygulama penceresinde açılır. Edge yoksa varsayılan tarayıcı kullanılır. Adres çubuğu ve sekme kalabalığı yoktur."],
+              ["Panel açılır", "Panel, Personel26’nın kendi penceresinde açılır. Adres çubuğu, sekme ve localhost adresi görünmez; F11 ile tam ekran yapılabilir."],
               ["Kapatırken yedek alınır", "Başlat menüsünde “Personel26 — Durdur” kısayolu vardır. Kapatmadan önce SQL yedeği backups klasörüne yazılır."],
             ].map(([title, text], i) => <li key={title} className="flex gap-3">
               <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-[10px] font-black text-sky-300 ring-1 ring-sky-400/30">{i + 1}</span>
@@ -297,10 +357,96 @@ export default function HelpPage() {
           <h3 className="mt-3 text-xs font-bold text-white">Güncel kal</h3>
           <p className="mt-1 text-[10.5px] leading-relaxed text-white/45">Ayarlar → Hakkında &amp; Güncelleme bölümünden yeni sürümü denetle. Kurulumdan önce yedek otomatik alınır.</p>
         </div>
-        <a href={REPOSITORY_URL + "/issues"} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[.035] p-4 text-[11px] font-bold text-white/70 transition hover:bg-white/[.06] hover:text-white">
-          Destek ve hata bildirimi <ArrowRight className="h-4 w-4" />
+        <a href="#iletisim" className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[.035] p-4 text-[11px] font-bold text-white/70 transition hover:bg-white/[.06] hover:text-white">
+          Destek, fikir ve hata bildirimi <ArrowRight className="h-4 w-4" />
         </a>
       </aside>
+    </section>
+
+    <section id="iletisim" className="mt-8 scroll-mt-24 rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/[.08] via-white/[.03] to-sky-500/[.06] p-5 sm:p-7">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-[2px] text-emerald-300/80">GERİ BİLDİRİM & İLETİŞİM</span>
+          <h2 className="mt-1 text-xl font-black text-white">Takıldığınızda doğrudan ulaşın</h2>
+          <p className="mt-1 text-xs text-white/45">Fikir, öneri, hata bildirimi veya kurulum desteği için aşağıdaki kanalları kullanabilirsiniz.</p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold text-emerald-200"><MessageCircle className="h-3.5 w-3.5" /> WhatsApp destekli</span>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
+        <div className="rounded-2xl border border-white/10 bg-[#0a1020]/70 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-white/40" htmlFor="feedback-category">Konu</label>
+            <select
+              id="feedback-category"
+              value={category}
+              onChange={event => setCategory(event.target.value)}
+              className="rounded-lg border border-white/12 bg-white/[.06] px-2.5 py-1.5 text-[11px] font-semibold text-white outline-none focus:border-emerald-400/60 [&>option]:bg-slate-900"
+            >
+              {["Fikir / öneri", "Hata bildirimi", "Kurulum desteği", "Yedek / geri yükleme", "Diğer"].map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <span className="ml-auto text-[9.5px] text-white/30">v{APP_VERSION} bilgisi otomatik eklenir</span>
+          </div>
+          <textarea
+            value={message}
+            onChange={event => setMessage(event.target.value)}
+            rows={5}
+            placeholder="Kısaca ne olduğunu, hangi ekranda olduğunu ve ne yapmak istediğinizi yazın…"
+            className="mt-3 w-full resize-y rounded-xl border border-white/12 bg-white/[.05] px-3 py-2.5 text-[11.5px] leading-relaxed text-white outline-none transition placeholder:text-white/25 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-500/15"
+          />
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => openWhatsApp(fullMessage)}
+              disabled={!canSend}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-3.5 py-2 text-[11px] font-bold text-white shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <MessageCircle className="h-4 w-4" /> WhatsApp ile gönder
+            </button>
+            <button
+              type="button"
+              onClick={sendMail}
+              disabled={!canSend}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[.06] px-3.5 py-2 text-[11px] font-bold text-white/80 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" /> E-posta ile gönder
+            </button>
+            <button
+              type="button"
+              onClick={copyFeedback}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-[11px] font-bold text-white/55 transition hover:bg-white/[.07] hover:text-white"
+            >
+              {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />} {copied ? "Kopyalandı" : "Kopyala"}
+            </button>
+          </div>
+          <p className="mt-2.5 text-[9.5px] leading-relaxed text-white/30">
+            WhatsApp düğmesi önce bilgisayardaki WhatsApp uygulamasını açar; uygulama yoksa web WhatsApp'a geçer. E-posta düğmesi varsayılan e-posta uygulamanızı açar.
+          </p>
+        </div>
+
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
+          <a href={CONTACT.website} target="_blank" rel="noreferrer" className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.04] p-3.5 transition hover:border-sky-400/30 hover:bg-white/[.07]">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300 ring-1 ring-sky-400/25"><Globe2 className="h-4 w-4" /></span>
+            <span className="min-w-0"><b className="block text-[11px] text-white/85">Web sitesi</b><span className="block truncate text-[10px] text-white/40 group-hover:text-sky-200">cehennemgibiyim.github.io</span></span>
+            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-white/25 group-hover:text-sky-300" />
+          </a>
+          <a href={CONTACT.phoneHref} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.04] p-3.5 transition hover:border-emerald-400/30 hover:bg-white/[.07]">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/25"><Phone className="h-4 w-4" /></span>
+            <span className="min-w-0"><b className="block text-[11px] text-white/85">Telefon</b><span className="block text-[10px] text-white/40 group-hover:text-emerald-200">{CONTACT.phoneDisplay}</span></span>
+            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-white/25 group-hover:text-emerald-300" />
+          </a>
+          <a href={`mailto:${CONTACT.email}`} className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.04] p-3.5 transition hover:border-violet-400/30 hover:bg-white/[.07]">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/25"><Mail className="h-4 w-4" /></span>
+            <span className="min-w-0"><b className="block text-[11px] text-white/85">E-posta</b><span className="block truncate text-[10px] text-white/40 group-hover:text-violet-200">{CONTACT.email}</span></span>
+            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-white/25 group-hover:text-violet-300" />
+          </a>
+          <button type="button" onClick={() => openWhatsApp(`Merhaba, Personel26 v${APP_VERSION} hakkında destek almak istiyorum.`)} className="group flex w-full items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[.07] p-3.5 text-left transition hover:border-emerald-400/40 hover:bg-emerald-400/[.11]">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-400/25"><MessageCircle className="h-4 w-4" /></span>
+            <span className="min-w-0"><b className="block text-[11px] text-white/85">WhatsApp iletişim</b><span className="block text-[10px] text-white/40 group-hover:text-emerald-200">Uygulama yoksa web WhatsApp açılır</span></span>
+            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-white/25 group-hover:text-emerald-300" />
+          </button>
+        </div>
+      </div>
     </section>
 
     <footer className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 text-[10px] text-white/25">

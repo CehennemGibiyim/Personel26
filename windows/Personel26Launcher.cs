@@ -7,9 +7,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 
 [assembly: System.Reflection.AssemblyTitle("Personel26")]
-[assembly: System.Reflection.AssemblyDescription("Personel26 Puantaj ve Nobet Yonetimi baslaticisi")]
+[assembly: System.Reflection.AssemblyDescription("Personel26 Puantaj ve Nobet Yonetimi")]
 [assembly: System.Reflection.AssemblyCompany("Personel26")]
 [assembly: System.Reflection.AssemblyProduct("Personel26")]
 [assembly: System.Reflection.AssemblyCopyright("Personel26")]
@@ -33,6 +35,8 @@ namespace Personel26
             if (startOnly) quiet = true;
             bool noBrowser = startOnly || Has(args, "--no-browser");
             bool forceBrowser = Has(args, "--browser");
+            bool smokeTest = Has(args, "--webview-test");
+            if (smokeTest) quiet = true;
             string root = Path.GetDirectoryName(Application.ExecutablePath);
             Log(root, "Baslatildi: " + string.Join(" ", args));
 
@@ -40,24 +44,24 @@ namespace Personel26
             {
                 if (Has(args, "--stop")) return Stop(root, quiet);
                 if (Has(args, "--backup")) return Backup(root, quiet);
-                return Start(root, quiet, noBrowser || startOnly, forceBrowser);
+                return Start(root, quiet, noBrowser || startOnly, forceBrowser, smokeTest);
             }
             catch (Exception ex)
             {
                 Log(root, "HATA: " + ex);
-                if (!quiet) ShowError("Personel26 baslatilamadi.\n\n" + ex.Message);
+                if (!quiet && !smokeTest) ShowError("Personel26 baslatilamadi.\n\n" + ex.Message);
                 return 1;
             }
         }
 
-        private static int Start(string root, bool quiet, bool noBrowser, bool forceBrowser)
+        private static int Start(string root, bool quiet, bool noBrowser, bool forceBrowser, bool smokeTest)
         {
             int port = ReadPort(root);
             Log(root, "Start: port=" + port + " noBrowser=" + noBrowser);
             if (Healthy(port))
             {
                 Log(root, "Start: sunucu zaten calisiyor");
-                if (!noBrowser) OpenUi(port, forceBrowser);
+                if (!noBrowser) return OpenUi(port, forceBrowser, root, smokeTest);
                 return 0;
             }
 
@@ -71,7 +75,7 @@ namespace Personel26
                     {
                         if (Healthy(port))
                         {
-                            if (!noBrowser) OpenUi(port, forceBrowser);
+                            if (!noBrowser) return OpenUi(port, forceBrowser, root, smokeTest);
                             return 0;
                         }
                         Thread.Sleep(500);
@@ -106,7 +110,7 @@ namespace Personel26
                     return 1;
                 }
                 Log(root, "Start: panel hazir");
-                if (!noBrowser) OpenUi(port, forceBrowser);
+                if (!noBrowser) return OpenUi(port, forceBrowser, root, smokeTest);
                 return 0;
             }
         }
@@ -317,39 +321,70 @@ namespace Personel26
             catch { return false; }
         }
 
-        private static void OpenUi(int port, bool forceBrowser)
+        /**
+         * Varsayilan acilis artik tarayici degil, uygulamanin kendi WebView2
+         * penceresidir. Adres cubugu, sekme ve localhost adresi kullaniciya
+         * gosterilmez. Sunucu yalnizca bu bilgisayarda, 127.0.0.1 uzerinde
+         * calisir; disariya acilmaz.
+         *
+         * --browser yalnizca sorun giderme icin dis tarayiciyi acar.
+         */
+        private static int OpenUi(int port, bool forceBrowser, string root, bool smokeTest)
         {
             string url = "http://127.0.0.1:" + port + "/";
-            if (!forceBrowser)
+            if (forceBrowser)
             {
-                foreach (string edge in EdgePaths())
-                {
-                    if (!File.Exists(edge)) continue;
-                    try
-                    {
-                        ProcessStartInfo info = new ProcessStartInfo(edge,
-                            "--app=" + url + " --window-size=1440,920 --no-first-run --disable-features=Translate");
-                        info.UseShellExecute = false;
-                        Process.Start(info);
-                        return;
-                    }
-                    catch { }
-                }
+                OpenExternal(url);
+                return 0;
             }
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+
+            if (!WebView2Available())
+            {
+                Log(root, "WebView2 runtime bulunamadi");
+                if (!smokeTest)
+                {
+                    DialogResult answer = MessageBox.Show(
+                        "Personel26'nın kendi penceresinde açılması için Microsoft Edge WebView2 Runtime gerekir.\n\n" +
+                        "Windows 10/11'de bu bileşen genellikle hazırdır. Şimdi indirme sayfasını açmak ister misiniz?",
+                        "Personel26 — WebView2 gerekli", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                    if (answer == DialogResult.Yes)
+                        OpenExternal("https://go.microsoft.com/fwlink/p/?LinkId=2124703");
+                }
+                return 1;
+            }
+
+            using (AppWindow window = new AppWindow(url, root, smokeTest))
+            {
+                Application.Run(window);
+                return window.ExitCode;
+            }
         }
 
-        private static string[] EdgePaths()
+        private static bool WebView2Available()
         {
-            string programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return new string[]
+            try
             {
-                Path.Combine(programFilesX86, @"Microsoft\Edge\Application\msedge.exe"),
-                Path.Combine(programFiles, @"Microsoft\Edge\Application\msedge.exe"),
-                Path.Combine(local, @"Microsoft\Edge\Application\msedge.exe"),
-            };
+                string version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                return !string.IsNullOrEmpty(version);
+            }
+            catch { return false; }
+        }
+
+        internal static bool TryOpenExternal(string target)
+        {
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo(target);
+                info.UseShellExecute = true;
+                Process.Start(info);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        internal static void OpenExternal(string target)
+        {
+            TryOpenExternal(target);
         }
 
         private static string BackupDirectory(string root)
@@ -392,7 +427,8 @@ namespace Personel26
                 }
                 else
                 {
-                    Process.Start("explorer.exe", "\"" + Path.GetDirectoryName(file ?? "") + "\"");
+                    string directory = file != null ? Path.GetDirectoryName(file) : BackupDirectory(Path.GetDirectoryName(Application.ExecutablePath));
+                    Process.Start("explorer.exe", "\"" + (directory ?? "") + "\"");
                 }
             }
             catch { }
@@ -412,7 +448,7 @@ namespace Personel26
             return tail.ToString().Trim();
         }
 
-        private static void Log(string root, string message)
+        internal static void Log(string root, string message)
         {
             try
             {
@@ -439,6 +475,263 @@ namespace Personel26
         private static void ShowError(string message)
         {
             MessageBox.Show(message, "Personel26", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /**
+     * Uygulamanin kendi masaustu penceresi. WebView2, paneli tam ekran
+     * kullanilabilen normal bir Windows uygulamasi gibi gosterir.
+     */
+    internal sealed class AppWindow : Form
+    {
+        private readonly WebView2 view;
+        private readonly string startUrl;
+        private readonly string root;
+        private readonly bool smokeTest;
+        private readonly System.Windows.Forms.Timer smokeTimer;
+        private bool fullScreen;
+        private FormBorderStyle normalBorder;
+        private FormWindowState normalState;
+        private bool navigationDone;
+        public int ExitCode;
+
+        public AppWindow(string url, string root, bool smokeTest)
+        {
+            this.startUrl = url;
+            this.root = root;
+            this.smokeTest = smokeTest;
+            Text = "Personel26 — Puantaj ve Nöbet Yönetimi";
+            StartPosition = FormStartPosition.CenterScreen;
+            WindowState = smokeTest ? FormWindowState.Normal : FormWindowState.Maximized;
+            if (smokeTest)
+            {
+                ShowInTaskbar = false;
+                Opacity = 0;
+                Size = new Size(1280, 800);
+            }
+            MinimumSize = new Size(1100, 720);
+            BackColor = Color.FromArgb(7, 11, 20);
+            KeyPreview = true;
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+
+            view = new WebView2();
+            view.Dock = DockStyle.Fill;
+            view.BackColor = Color.FromArgb(7, 11, 20);
+            Controls.Add(view);
+
+            Shown += OnShown;
+            FormClosed += delegate { if (smokeTimer != null) smokeTimer.Stop(); };
+
+            if (smokeTest)
+            {
+                smokeTimer = new System.Windows.Forms.Timer();
+                smokeTimer.Interval = 30000;
+                smokeTimer.Tick += delegate
+                {
+                    smokeTimer.Stop();
+                    Program.Log(root, "WebView testi zaman asimi");
+                    ExitCode = 1;
+                    Close();
+                };
+                smokeTimer.Start();
+            }
+        }
+
+        private async void OnShown(object sender, EventArgs e)
+        {
+            try
+            {
+                string userData = Path.Combine(root, @"data\webview2");
+                if (!Directory.Exists(userData)) Directory.CreateDirectory(userData);
+                CoreWebView2EnvironmentOptions options = new CoreWebView2EnvironmentOptions(
+                    "--autoplay-policy=no-user-gesture-required --disable-features=Translate");
+                CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, userData, options);
+                await view.EnsureCoreWebView2Async(environment);
+
+                CoreWebView2 core = view.CoreWebView2;
+                core.Settings.AreDevToolsEnabled = false;
+                core.Settings.IsStatusBarEnabled = false;
+                core.Settings.AreDefaultContextMenusEnabled = true;
+                core.Settings.AreBrowserAcceleratorKeysEnabled = true;
+                core.Settings.IsZoomControlEnabled = true;
+
+                core.NavigationStarting += OnNavigationStarting;
+                core.NavigationCompleted += OnNavigationCompleted;
+                core.NewWindowRequested += OnNewWindowRequested;
+                core.DownloadStarting += OnDownloadStarting;
+                core.ContainsFullScreenElementChanged += OnContainsFullScreenElementChanged;
+                core.DocumentTitleChanged += delegate
+                {
+                    if (!string.IsNullOrEmpty(core.DocumentTitle))
+                        Text = core.DocumentTitle + " — Personel26";
+                };
+                core.ProcessFailed += OnProcessFailed;
+
+                view.Source = new Uri(startUrl);
+            }
+            catch (Exception ex)
+            {
+                Program.Log(root, "WebView2 baslatma hatasi: " + ex);
+                ExitCode = 1;
+                if (!smokeTest)
+                    MessageBox.Show("Panel penceresi açılamadı.\n\n" + ex.Message, "Personel26",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Close();
+            }
+        }
+
+        private void OnNavigationStarting(object sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            Uri uri;
+            if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out uri)) return;
+            if (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == "file") return;
+
+            // whatsapp:, mailto:, tel: gibi adresler Windows'ta varsayilan
+            // uygulamayla acilir. WebView2'de hata sayfasi gosterilmez.
+            e.Cancel = true;
+            if (uri.Scheme == "whatsapp")
+            {
+                // WhatsApp Desktop yoksa web WhatsApp'a dus. Boylece kullanici
+                // "hicbir sey olmadi" durumunda kalmez.
+                if (!Program.TryOpenExternal(e.Uri)) view.CoreWebView2.Navigate(WhatsAppWebUrl(uri));
+                return;
+            }
+            Program.OpenExternal(e.Uri);
+        }
+
+        private static string WhatsAppWebUrl(Uri uri)
+        {
+            string phone = "";
+            string text = "";
+            string query = uri.Query.TrimStart('?');
+            foreach (string pair in query.Split('&'))
+            {
+                int split = pair.IndexOf('=');
+                if (split <= 0) continue;
+                string key = Uri.UnescapeDataString(pair.Substring(0, split));
+                string value = Uri.UnescapeDataString(pair.Substring(split + 1));
+                if (key == "phone") phone = value;
+                else if (key == "text") text = value;
+            }
+            string target = "https://wa.me/" + phone;
+            if (!string.IsNullOrEmpty(text)) target += "?text=" + Uri.EscapeDataString(text);
+            return target;
+        }
+
+        private async void OnNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (!smokeTest || navigationDone) return;
+            navigationDone = true;
+            if (!e.IsSuccess)
+            {
+                Program.Log(root, "WebView testi navigasyon hatasi: " + e.WebErrorStatus);
+                ExitCode = 1;
+                Close();
+                return;
+            }
+            try
+            {
+                // Panelin gercekten render edildigini ve sol menusunun geldigini dogrula.
+                string result = await view.CoreWebView2.ExecuteScriptAsync(
+                    "document.body.innerText.indexOf('Personel26') >= 0 && document.querySelectorAll('aside nav button').length > 0 ? 'ok' : 'fail'");
+                Program.Log(root, "WebView testi sonucu: " + result);
+                ExitCode = result.IndexOf("ok", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1;
+            }
+            catch (Exception ex)
+            {
+                Program.Log(root, "WebView testi hatasi: " + ex);
+                ExitCode = 1;
+            }
+            Close();
+        }
+
+        private void OnNewWindowRequested(object sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            e.Handled = true;
+            Program.OpenExternal(e.Uri);
+        }
+
+        private void OnDownloadStarting(object sender, CoreWebView2DownloadStartingEventArgs e)
+        {
+            if (smokeTest)
+            {
+                e.Cancel = true;
+                return;
+            }
+            try
+            {
+                string suggested = Path.GetFileName(e.ResultFilePath);
+                if (string.IsNullOrEmpty(suggested)) suggested = "personel26-indirme";
+                using (SaveFileDialog dialog = new SaveFileDialog())
+                {
+                    dialog.Title = "Dosyayı kaydet";
+                    dialog.FileName = suggested;
+                    dialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + @"\Downloads";
+                    dialog.Filter = "Tüm dosyalar (*.*)|*.*";
+                    dialog.OverwritePrompt = true;
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        e.ResultFilePath = dialog.FileName;
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        e.Cancel = true;
+                    }
+                }
+            }
+            catch
+            {
+                // WebView2'nin kendi indirme akisina birak.
+            }
+        }
+
+        private void OnContainsFullScreenElementChanged(object sender, object e)
+        {
+            try
+            {
+                if (view.CoreWebView2 != null)
+                    SetFullScreen(view.CoreWebView2.ContainsFullScreenElement);
+            }
+            catch { }
+        }
+
+        private void OnProcessFailed(object sender, CoreWebView2ProcessFailedEventArgs e)
+        {
+            Program.Log(root, "WebView2 surec hatasi: " + e.ProcessFailedKind);
+        }
+
+        private void SetFullScreen(bool value)
+        {
+            if (fullScreen == value) return;
+            fullScreen = value;
+            if (value)
+            {
+                normalBorder = FormBorderStyle;
+                normalState = WindowState;
+                FormBorderStyle = FormBorderStyle.None;
+                WindowState = FormWindowState.Maximized;
+            }
+            else
+            {
+                FormBorderStyle = normalBorder == FormBorderStyle.None ? FormBorderStyle.Sizable : normalBorder;
+                WindowState = normalState == FormWindowState.Minimized ? FormWindowState.Normal : normalState;
+            }
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.F11)
+            {
+                SetFullScreen(!fullScreen);
+                return true;
+            }
+            if (keyData == Keys.Escape && fullScreen)
+            {
+                SetFullScreen(false);
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
     }
 
