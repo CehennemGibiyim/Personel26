@@ -112,7 +112,20 @@ try {
   Assert-Check 'Geri yuklenen kurum ayarlari' ((Api '/api/settings').settings.institution -eq 'CI KURUM KAYDI KORUNDU')
   # Panelden tek tikla geri yukleme: klasor yedegi al, veriyi degistir, API ile geri don.
   $folderBackup = Api '/api/backup/folder' 'POST' @{ action='create' }
-  Assert-Check 'Panelden klasor yedegi olusturuldu' ($folderBackup.ok -eq $true -and (Test-Path $folderBackup.file))
+  $folderDumpHead = if ($folderBackup.file -and (Test-Path $folderBackup.file)) { Get-Content -LiteralPath $folderBackup.file -TotalCount 5 -ErrorAction SilentlyContinue } else { '' }
+  Assert-Check 'Panelden klasor yedegi olusturuldu' ($folderBackup.ok -eq $true -and (Test-Path $folderBackup.file) -and ($folderDumpHead -match 'PostgreSQL database dump'))
+  # Antivirusun engelledigi PowerShell zinciri yerine yedek dogrudan pg_dump ile
+  # alinir; kapanis yedegi de ayni yolu kullanmali ve betik yedegine dusmemeli.
+  # 15 dakikalik kapanis siniri testi belirsizlestirmesin: isaret dosyasi silinir.
+  Remove-Item (Join-Path $Target 'backups\.last-auto-backup') -Force -ErrorAction SilentlyContinue
+  $stopBackupBefore = Backup-Count
+  $stopCode = Run-Launcher -Arguments @('--stop','--quiet') -TimeoutSeconds 120
+  Assert-Check 'Personel26.exe ile kapanis yedegi' ($stopCode -eq 0 -and (Wait-Backup ($stopBackupBefore + 1) 45))
+  $healthAfterLauncherStop = $false
+  try { $healthAfterLauncherStop = (Api '/api/health').ok } catch {}
+  Assert-Check 'Personel26.exe ile guvenli kapatma' (-not $healthAfterLauncherStop)
+  $restartCode = Run-Launcher -Arguments @('--start-only') -TimeoutSeconds 300
+  Assert-Check 'Kapanis yedeginden sonra yeniden baslatma' ($restartCode -eq 0 -and (Api '/api/health').ok -eq $true)
   Api '/api/personnel' 'DELETE' @{id=$Id;hard=$true} | Out-Null
   $folderRestore = Api '/api/backup/folder' 'POST' @{ action='restore'; fileName=(Split-Path -Leaf $folderBackup.file) }
   Assert-Check 'Panelden SQL yedegini geri yukleme' ($folderRestore.ok -eq $true -and (Api '/api/personnel').personnel.Count -eq $Before)

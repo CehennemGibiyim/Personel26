@@ -2,15 +2,20 @@
  * Kurulum klasöründeki `backups` dizini.
  *
  * Windows kurulumunda dosyalar Personel26'nın kurulu olduğu klasörde tutulur
- * (`P26_ROOT`, varsayılan olarak kurulum kökü). Yedek alma işi, uygulamayla
- * aynı pakette gelen `Personel26-Yonet.ps1 -Action Backup` betiğine devredilir:
- * betik `pg_dump` ile tam SQL yedeği üretir, 7 günden eski yedekleri temizler.
+ * (`P26_ROOT`, varsayılan olarak kurulum kökü). Yedek, paketteki `pg_dump.exe`
+ * doğrudan çalıştırılarak alınır; 7 günden eski yedekler temizlenir.
+ *
+ * PowerShell betiği bilinçli olarak kullanılmaz: antivirüs programları
+ * `powershell.exe -ExecutionPolicy Bypass` zincirini ve betikten dosya yazmayı
+ * sık sık engellediği için otomatik ve elle yedekler başarısız oluyordu.
+ * Doğrudan pg_dump/psql çağrısı hem daha hızlı hem de imzalı PostgreSQL
+ * araçlarıyla çalıştığı için antivirüs davranış korumalarına takılmaz.
  *
  * Bu modül yalnızca sunucuda kullanılır; GitHub Pages (statik) sürümünde
  * tarayıcı köprüsü bu ucu tanımaz.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { appRoot, dataDir } from "@/lib/server/update";
 
@@ -18,7 +23,6 @@ export const BACKUP_RETENTION_DAYS = 7;
 /** Kapanış yedeği bu süreden sık alınmaz (her sekme kapanışında yedek alınmasın). */
 export const AUTO_BACKUP_INTERVAL_MS = 15 * 60 * 1000;
 
-const MANAGER = "Personel26-Yonet.ps1";
 const AUTO_MARKER = ".last-auto-backup";
 const BACKUP_EXT = ".sql";
 
@@ -44,11 +48,19 @@ export function backupFolder(): string | null {
   return root ? path.join(root, "backups") : null;
 }
 
+/** Paketteki PostgreSQL araçlarının klasörü (`pg_dump.exe`, `psql.exe`). */
+function pgBinDir(): string | null {
+  const root = appRoot();
+  if (!root) return null;
+  const bin = path.join(root, "pgsql", "bin");
+  return existsSync(path.join(bin, "pg_dump.exe")) ? bin : null;
+}
+
 function unsupportedReason(): string | null {
   if (process.platform !== "win32") return "Yedek klasörü yalnızca Windows kurulumunda kullanılabilir.";
   const root = appRoot();
   if (!root) return "Kurulum klasörü bulunamadı; bu çalışma biçiminde dosya yedeği alınamaz.";
-  if (!existsSync(path.join(root, MANAGER))) return "Yedekleme betiği bulunamadı; yeni kurulum paketiyle güncelleyin.";
+  if (!pgBinDir()) return "Yedekleme araçları (pg_dump) bulunamadı; yeni kurulum paketiyle güncelleyin.";
   return null;
 }
 
@@ -109,32 +121,101 @@ function runProcess(command: string, args: string[], cwd: string, timeoutMs: num
   });
 }
 
-function runPowerShell(args: string[], cwd: string, timeoutMs: number): Promise<string> {
-  return runProcess("powershell.exe", args, cwd, timeoutMs, { ...process.env }, "Yedekleme");
+/** `personel26-YYYYMMDD-HHmmss-fff.sql` (Personel26-Yonet.ps1 ile aynı ad düzeni). */
+function backupStamp(): string {
+  const now = new Date();
+  const pad = (value: number, width = 2) => String(value).padStart(width, "0");
+  return (
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}` +
+    `-${pad(now.getMilliseconds(), 3)}`
+  );
+}
+
+/** 7 günden eski otomatik yedekleri siler (Personel26-Yonet.ps1 ile aynı kural). */
+function pruneOldBackups(folder: string): void {
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  let names: string[];
+  try {
+    names = readdirSync(folder);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (!/^personel26-.*\.sql$/i.test(name)) continue;
+    const full = path.join(folder, name);
+    try {
+      if (statSync(full).mtimeMs < cutoff) rmSync(full, { force: true });
+    } catch {
+      /* Dosya başka bir işlemce kullanılıyorsa sonraki yedekte yeniden denenir. */
+    }
+  }
 }
 
 /**
- * `Personel26-Yonet.ps1 -Action Backup` çalıştırır ve oluşan dosyayı döndürür.
- * Yeni dosya, klasördeki en güncel `.sql` dosyasından bulunur (çıktı kodlamasına
- * bağlı kalmamak için).
+ * Dosya yazımı Windows güvenlik katmanı (antivirüs, kontrollü klasör erişimi)
+ * tarafından engellendiğinde kullanıcıya ne yapacağını söyleyen mesaj üretir.
+ */
+function blockedBackupError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/EPERM|EACCES|EBUSY|permission denied|operation not permitted|access is denied|erişim engellendi/i.test(message)) {
+    return new Error(
+      "Yedek dosyası Windows veya antivirüs programı tarafından engellendi. " +
+      "Personel26'yı antivirüsün izin listesine ekleyip yeniden deneyin.",
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
+}
+
+/**
+ * `pg_dump.exe` doğrudan çalıştırılarak tam SQL yedeği üretir.
+ *
+ * PowerShell ya da komut kabuğu kullanılmaz; böylece antivirüslerin betik
+ * motoru ve `-ExecutionPolicy Bypass` için uyguladığı engeller devreye girmez.
+ * Yedek doğrudan hedef dosyaya yazılır, boş/yarım dosya bırakılmaz.
  */
 export async function createFolderBackup(): Promise<{ file: string | null; folder: string }> {
   const reason = unsupportedReason();
   if (reason) throw new Error(reason);
   const root = appRoot();
   const folder = backupFolder();
-  if (!root || !folder) throw new Error("Yedek klasörü belirlenemedi.");
+  const bin = pgBinDir();
+  if (!root || !folder || !bin) throw new Error("Yedek klasörü belirlenemedi.");
+  const connection = pgConnection();
   mkdirSync(folder, { recursive: true });
 
-  const before = new Set(listBackupFiles(folder).map(file => file.name));
-  await runPowerShell([
-    "-NoProfile", "-ExecutionPolicy", "Bypass",
-    "-File", path.join(root, MANAGER),
-    "-Action", "Backup",
-  ], root, 3 * 60 * 1000);
+  const target = path.join(folder, `personel26-${backupStamp()}.sql`);
+  try {
+    await runProcess(
+      path.join(bin, "pg_dump.exe"),
+      [
+        "-h", "127.0.0.1", "-p", String(connection.port), "-U", connection.user,
+        "-d", connection.database, "--clean", "--if-exists", "--no-owner", "--no-privileges",
+        "-f", target,
+      ],
+      root,
+      3 * 60 * 1000,
+      { ...process.env, PGPASSWORD: connection.password, PGCONNECT_TIMEOUT: "15", PGCLIENTENCODING: "UTF8" },
+      "Yedekleme",
+    );
+  } catch (error) {
+    try { rmSync(target, { force: true }); } catch { /* yarım dosya kalabilir */ }
+    throw blockedBackupError(error);
+  }
 
-  const created = listBackupFiles(folder).find(file => !before.has(file.name)) ?? listBackupFiles(folder)[0] ?? null;
-  return { file: created ? path.join(folder, created.name) : null, folder };
+  let size = 0;
+  try {
+    size = statSync(target).size;
+  } catch (error) {
+    throw blockedBackupError(error);
+  }
+  if (size === 0) {
+    try { rmSync(target, { force: true }); } catch { /* boş dosya silinemedi */ }
+    throw new Error("Yedek dosyası boş oluştu; antivirüs dosyayı engellemiş olabilir. Yeniden deneyin.");
+  }
+
+  pruneOldBackups(folder);
+  return { file: target, folder };
 }
 
 /** Kapanışta otomatik yedek: 15 dakikada en fazla bir kez. */

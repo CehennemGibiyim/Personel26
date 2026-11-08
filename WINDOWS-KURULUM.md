@@ -30,6 +30,12 @@ Hedef PC’de **`Personel26.exe`** dosyasına çift tıklayın. Kısa bir “Per
 
 Verileriniz `data\` klasöründedir; SQL yedekleri kurulum klasöründeki `backups\` dizininde toplanır (son 7 gün saklanır). Durdurma sırasında son bir yedek otomatik alınır. Paneldeki **Yedekleme** sayfasında klasör yolu gösterilir; listedeki bir SQL dosyasını **Geri yükle** ile tek tıkla döndürebilirsiniz (önce güvenlik yedeği alınır). Tüm kurulumu taşımak için `data\` ve `backups\` klasörlerini birlikte kopyalayın.
 
+## Antivirüs ve güvenlik yazılımları
+
+1.6.1 sürümünden itibaren SQL yedekleri `Personel26-Yonet.ps1` betiğiyle değil, paketteki `pg_dump.exe` doğrudan çalıştırılarak alınır. Böylece antivirüs programlarının sık engellediği `powershell.exe -ExecutionPolicy Bypass` zinciri yedekleme yolundan çıkarılmıştır. Yedek yine kurulum klasöründeki `backups` dizinine yazılır.
+
+Antivirüs yedek dosyasını yine de engellerse, antivirüsün izin/istisna listesine **Personel26 kurulum klasörünü** ve `backups` dizinini ekleyin. Windows Güvenlik → **Fidye yazılımı koruması** → **Klasör erişimi denetimi** açıksa Personel26'ya izin verin. Engellenen dosya karantinaya alındıysa geri yükleyip istisna ekledikten sonra **Yedekleme → Şimdi yedek al** ile yeniden deneyin; güvenlik yazılımını tamamen kapatmanız gerekmez.
+
 ## Kurulum dosyasını (.exe) üretmek
 
 Inno Setup 6 kurulu olmalı. Taşınabilir paket henüz yoksa betik onu da üretir:
