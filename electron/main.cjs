@@ -128,23 +128,34 @@ function runManager(action, extra = [], timeoutMs = START_TIMEOUT_MS) {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
+    let settled = false;
     const append = (chunk) => {
       output += String(chunk);
       if (output.length > 60_000) output = output.slice(-60_000);
     };
     child.stdout.on('data', append);
     child.stderr.on('data', append);
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
     const timer = setTimeout(() => {
       try { child.kill(); } catch { /* yoksay */ }
-      resolve({ code: 1, output, timedOut: true });
+      finish({ code: 1, output, timedOut: true });
     }, timeoutMs);
     child.on('error', (error) => {
       clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       reject(error);
     });
-    child.on('close', (code) => {
+    // 'close' yerine 'exit': PostgreSQL gibi arka plan süreçleri PowerShell'in
+    // stdout borusunu miras alabildiği için boru kapanmayabilir; süreç çıkışı
+    // yeterlidir ve yedek/sunucu komutları bu yüzden zaman aşımına düşmemeli.
+    child.on('exit', (code) => {
       clearTimeout(timer);
-      resolve({ code: code == null ? 1 : code, output, timedOut: false });
+      setTimeout(() => finish({ code: code == null ? 1 : code, output, timedOut: false }), 50);
     });
   });
 }
@@ -369,7 +380,11 @@ async function runCommand() {
       return;
     }
   } catch (error) {
-    if (!quiet) dialog.showErrorBox('Personel26 başlatılamadı', error && error.message ? error.message : String(error));
+    const message = error && error.message ? error.message : String(error);
+    log(`Komut hatası: ${message}`);
+    // Komut modunda (--start-only/--desktop-test/--backup/--stop) modal kutu
+    // açılmaz; kurulum ve otomasyon süreçleri yanıt bekleyerek kilitlenmesin.
+    if (!quiet) console.error(message);
     app.exit(1);
   }
 }
