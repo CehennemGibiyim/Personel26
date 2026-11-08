@@ -34,6 +34,14 @@ export function createBridgePlugin({ root, ddl, stubNodeModules }) {
       esbuild.onResolve({ filter: /^@\/db$/ }, () => ({
         path: path.join(root, "src", "lib", "browser-db", "pglite-client.ts"),
       }));
+      // Bu kural, genel `@/` çözümleyicisinden ÖNCE gelmeli; aksi hâlde gerçek
+      // dosya yolu bulunur ve Node.js bağımlılıkları tarayıcı paketine girer.
+      if (stubNodeModules) {
+        // Otomatik yedek yalnızca Windows kurulumunda çalışır. Tarayıcı sürümünde
+        // bu modülün Node.js bağımlılıkları (pg_dump, dosya sistemi) pakete
+        // girmesin; rota dosyaları aynı sözleşmeyi no-op olarak görsün.
+        esbuild.onResolve({ filter: /^@\/lib\/server\/auto-backup$/ }, () => ({ path: "auto-backup-stub", namespace: "p26" }));
+      }
       esbuild.onResolve({ filter: /^@\// }, (args) => ({ path: resolveSource(root, args.path) }));
       // SheetJS: Node'a özel `require` çağrıları ESM paketinde çalışmadığı için
       // tarayıcı/Node ortak tek dosya derlemesi kullanılır (xlsx.full.min.js).
@@ -48,6 +56,9 @@ export function createBridgePlugin({ root, ddl, stubNodeModules }) {
       esbuild.onLoad({ filter: /.*/, namespace: "p26" }, (args) => {
         if (args.path === "schema-ddl") {
           return { contents: `export default ${JSON.stringify(ddl)};`, loader: "js" };
+        }
+        if (args.path === "auto-backup-stub") {
+          return { contents: "export function scheduleMutationBackup() {}", loader: "js" };
         }
         return {
           contents: [
