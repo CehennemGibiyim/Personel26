@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1', [string]$WebViewVersion = '1.0.3485.44')
+param([switch]$SkipBuild, [switch]$NoZip, [string]$NodeVersion = '22.22.3', [string]$PgVersion = '16.13-1')
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
@@ -49,56 +49,62 @@ if (-not $SkipBuild) {
   } finally { Pop-Location }
 }
 if (-not (Test-Path (Join-Path $Root '.next\standalone\server.js'))) { throw 'Next.js standalone sunucu ciktisi bulunamadi.' }
-# Masaustu kisayolunun hedefi olan ikonlu baslatici exe'yi derle.
-# .bat dosyalari yalnizca geriye donuk uyumluluk icin pakette kalir.
-function Build-Launcher {
-  $cscCandidates = @(
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'),
-    (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe')
-  )
-  $csc = $cscCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if (-not $csc) { throw 'C# derleyicisi (csc.exe) bulunamadi. .NET Framework 4.x gerekli.' }
-
-  # WebView2, paneli tarayici/localhost adresi gostermeden kendi penceresinde
-  # acar. NuGet paketindeki yonetilen assembly'ler ve x64 loader pakete girer.
-  $webViewPackage = Join-Path $Cache "microsoft.web.webview2.$WebViewVersion.nupkg"
-  if (-not (Test-Path $webViewPackage)) {
-    Get-WebWithRetry "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/$WebViewVersion" $webViewPackage
-  }
-  $webViewTmp = Join-Path $Cache 'webview2-extract'
-  if (Test-Path $webViewTmp) { Remove-Item $webViewTmp -Recurse -Force }
-  Add-Type -AssemblyName System.IO.Compression.FileSystem
-  [IO.Compression.ZipFile]::ExtractToDirectory($webViewPackage, $webViewTmp)
-  $webViewCore = Join-Path $webViewTmp 'lib\net462\Microsoft.Web.WebView2.Core.dll'
-  $webViewForms = Join-Path $webViewTmp 'lib\net462\Microsoft.Web.WebView2.WinForms.dll'
-  $webViewLoader = Join-Path $webViewTmp 'build\native\x64\WebView2Loader.dll'
-  foreach ($file in @($webViewCore, $webViewForms, $webViewLoader)) {
-    if (-not (Test-Path $file)) { throw "WebView2 paket dosyasi bulunamadi: $file" }
-  }
-
-  $build = Join-Path $env:TEMP ('p26-launcher-' + [guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory -Force -Path $build | Out-Null
-  try {
-    Copy-Item (Join-Path $PSScriptRoot 'Personel26Launcher.cs') $build -Force
-    Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') $build -Force
-    Copy-Item (Join-Path $PSScriptRoot 'Personel26.exe.manifest') $build -Force
-    $versionSource = Join-Path $build 'Personel26Launcher.version.cs'
-    $assemblyVersion = "$AppVersion.0"
-    $versionCode = "using System.Reflection;`r`n[assembly: AssemblyVersion(`"$assemblyVersion`")]`r`n[assembly: AssemblyFileVersion(`"$assemblyVersion`")]`r`n"
-    [IO.File]::WriteAllText($versionSource, $versionCode, (New-Object System.Text.UTF8Encoding($false)))
-    Push-Location $build
+# Personel26.exe artik bir C#/WebView2 baslatici degil, StockManager ile ayni
+# Electron masaustu kabugudur. Electron dagitimi kurulum klasorune kopyalanir;
+# app klasoru kendi main.cjs dosyamizi yukler. Boylece adres cubugu veya
+# tarayici penceresi olmadan gercek bir masaustu uygulamasi acilir.
+function Build-DesktopShell {
+  $electronDist = Join-Path $Root 'node_modules\electron\dist'
+  $electronExe = Join-Path $electronDist 'electron.exe'
+  if (-not (Test-Path $electronExe)) {
+    # electron paketi 45.x surumunde ikiliyi ilk kullanimda indirir. Paketleme
+    # sirasinda bu adimi acikca calistir; npm install tek basina yetmez.
+    Push-Location $Root
     try {
-      & $csc /nologo /target:winexe /platform:x64 /optimize+ /debug- /out:Personel26.exe /win32icon:personel26.ico /win32manifest:Personel26.exe.manifest /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll "/r:$webViewCore" "/r:$webViewForms" Personel26Launcher.cs Personel26Launcher.version.cs
-      if ($LASTEXITCODE -ne 0) { throw "Baslatici exe derlemesi basarisiz (kod $LASTEXITCODE)." }
+      & (Get-Command node.exe -ErrorAction Stop).Source (Join-Path $Root 'node_modules\electron\install.js')
+      if ($LASTEXITCODE -ne 0) { throw "Electron ikilisi indirilemedi (kod $LASTEXITCODE)." }
     } finally { Pop-Location }
-    Copy-Item (Join-Path $build 'Personel26.exe') (Join-Path $Out 'Personel26.exe') -Force
-    Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') (Join-Path $Out 'personel26.ico') -Force
-    Copy-Item $webViewCore $Out -Force
-    Copy-Item $webViewForms $Out -Force
-    Copy-Item $webViewLoader $Out -Force
-  } finally {
-    Remove-Item $build -Recurse -Force -ErrorAction SilentlyContinue
   }
+  if (-not (Test-Path $electronExe)) { throw 'Electron dagitimi bulunamadi; npm install ve electron/install.js calistirin.' }
+  $electronVersion = (Get-Content (Join-Path $Root 'node_modules\electron\package.json') -Raw | ConvertFrom-Json).version
+
+  Copy-Item (Join-Path $electronDist '*') $Out -Recurse -Force
+  Remove-Item (Join-Path $Out 'resources\default_app.asar') -Force -ErrorAction SilentlyContinue
+  $copiedElectron = Join-Path $Out 'electron.exe'
+  if (Test-Path $copiedElectron) {
+    Move-Item $copiedElectron (Join-Path $Out 'Personel26.exe') -Force
+  } elseif (-not (Test-Path (Join-Path $Out 'Personel26.exe'))) {
+    throw 'Electron exe pakete kopyalanamadi.'
+  }
+
+  $desktopApp = Join-Path $Out 'resources\app'
+  if (Test-Path $desktopApp) { Remove-Item $desktopApp -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $desktopApp | Out-Null
+  Copy-Item (Join-Path $Root 'electron\main.cjs') $desktopApp -Force
+  $desktopPackage = @{
+    name = 'personel26'
+    productName = 'Personel26'
+    version = $AppVersion
+    description = 'Personel26 Puantaj ve Nobet Yonetimi'
+    author = 'Personel26'
+    main = 'main.cjs'
+  } | ConvertTo-Json
+  [IO.File]::WriteAllText((Join-Path $desktopApp 'package.json'), $desktopPackage, (New-Object System.Text.UTF8Encoding($false)))
+
+  $rcedit = Join-Path $Root 'node_modules\rcedit\bin\rcedit-x64.exe'
+  if (-not (Test-Path $rcedit)) { throw 'rcedit bulunamadi; npm install calistirin.' }
+  & $rcedit (Join-Path $Out 'Personel26.exe') `
+    --set-icon (Join-Path $PSScriptRoot 'personel26.ico') `
+    --set-file-version "$AppVersion.0" `
+    --set-product-version "$AppVersion.0" `
+    --set-version-string FileDescription 'Personel26' `
+    --set-version-string ProductName 'Personel26' `
+    --set-version-string CompanyName 'Personel26' `
+    --set-version-string LegalCopyright 'Personel26'
+  if ($LASTEXITCODE -ne 0) { throw "Personel26.exe ikon/surum bilgisi yazilamadi (kod $LASTEXITCODE)." }
+
+  Copy-Item (Join-Path $PSScriptRoot 'personel26.ico') (Join-Path $Out 'personel26.ico') -Force
+  return $electronVersion
 }
 $NodeFile = "node-v$NodeVersion-win-x64.zip"
 $NodeZip = Join-Path $Cache $NodeFile
@@ -129,8 +135,8 @@ New-Item -ItemType Directory -Force -Path "$Out\pgsql" | Out-Null
 foreach ($dir in @('bin','lib','share')) { Copy-Item "$PgTmp\pgsql\$dir" "$Out\pgsql\$dir" -Recurse -Force }
 foreach ($file in @('Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','Personel26-Yonet.ps1','Personel26-Guncelle.ps1','schema.sql','schema-update.sql')) { Copy-Item (Join-Path $PSScriptRoot $file) $Out -Force }
 Copy-Item (Join-Path $PSScriptRoot 'README-WINDOWS.md') (Join-Path $Out 'BENIOKU.md')
-Build-Launcher
-@{ application=$AppVersion; schema='2026.01'; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
+$electronVersion = Build-DesktopShell
+@{ application=$AppVersion; schema='2026.01'; shell='electron'; electron=$electronVersion; node=$NodeVersion; postgresql=$PgVersion; nodeSha256=(Get-FileHash $NodeZip).Hash; postgresqlSha256=(Get-FileHash $PgZip).Hash } | ConvertTo-Json | Set-Content (Join-Path $Out 'manifest.json') -Encoding UTF8
 if (-not $NoZip) {
   $Zip = Join-Path $Root 'Personel26-Portable.zip'
   if (Test-Path $Zip) { Remove-Item $Zip -Force }

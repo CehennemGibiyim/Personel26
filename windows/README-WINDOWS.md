@@ -7,7 +7,7 @@ proje kökündeki `package.json` dosyasıdır.
 
 Node.js ve PostgreSQL ayrıca kurulmaz: paket kendi Windows x64 çalıştırıcılarını içerir. Kurulum kullanıcı klasörüne yapılır ve yönetici yetkisi gerektirmez.
 
-- **Personel26.exe**: ikonlu masaüstü uygulaması. Çift tıklandığında veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu başlatır ve paneli kendi gömülü WebView2 penceresinde açar. Adres çubuğu, sekme ve `localhost` adresi görünmez; F11 ile tam ekran yapılabilir. `--stop`, `--backup`, `--start-only`, `--webview-test` ve `--quiet` seçeneklerini destekler. WebView2 Runtime yoksa uygulama tarayıcıya düşmez, kurulum bağlantısını gösterir; `--browser` yalnızca sorun giderme içindir.
+- **Personel26.exe**: StockManager ile aynı Electron masaüstü kabuğu. Çift tıklandığında veritabanını ilk kullanımda kurar, veri silmeyen şema güncellemelerini uygular, sunucuyu gizli olarak başlatır ve paneli kendi Electron penceresinde açar. Adres çubuğu, sekme ve `localhost` adresi görünmez; **Alt+Enter** veya **F11** tam ekranı açar/kapatır, **Esc** çıkar. `--stop`, `--backup`, `--start-only`, `--desktop-test` ve `--quiet` seçeneklerini destekler. `--browser` yalnızca sorun giderme içindir.
 - **Personel26.exe --stop**: yalnızca paketin PID dosyasındaki, yolu doğrulanmış Node sürecini ve kendi PostgreSQL kümesini kapatır; diğer Node uygulamalarına dokunmaz. Kapanış SQL yedeğini alır.
 - **Personel26.exe --backup**: kurulum klasöründeki `backups` dizinine yerel PostgreSQL SQL yedeği oluşturur ve dosyayı Explorer’da gösterir.
 - **Personel26-Baslat.bat / -Durdur.bat / -Yedekle.bat**: yalnızca otomasyon ve geriye dönük uyumluluk içindir; kurulum kısayolları artık bunları kullanmaz.
@@ -63,13 +63,13 @@ Geliştirici makinesinde Node.js 22+ gerekir. Son kullanıcıda gerekmez.
 
 `powershell -ExecutionPolicy Bypass -File windows\paket-olustur.ps1`
 
-Paketleyici tip üretimi, TypeScript ve üretim derlemesini kontrol eder; sabitlenmiş Node.js 22.22.3 ve PostgreSQL 16.13-1 x64 dosyalarını indirir. Node arşivi resmi SHA-256 ile doğrulanır. WebView2 NuGet paketinden yönetilen assembly'ler ve x64 loader pakete eklenir; başlatıcı `/platform:x64` derlenir. Geliştirme `.env` dosyaları çıkarılır. `manifest.json` sürüm ve arşiv hashlerini içerir. Ardından Inno Setup 6 ile `windows/installer.iss` derlenir.
+Paketleyici tip üretimi, TypeScript ve üretim derlemesini kontrol eder; sabitlenmiş Node.js 22.22.3 ve PostgreSQL 16.13-1 x64 dosyalarını indirir. Node arşivi resmi SHA-256 ile doğrulanır. Electron dağıtımı `node_modules/electron/dist` içinden pakete kopyalanır; `Personel26.exe` olarak adlandırılır ve rcedit ile uygulama ikonu/sürüm bilgisi yazılır. `resources/app` altında kendi `main.cjs` kabuğumuz bulunur. Geliştirme `.env` dosyaları çıkarılır. `manifest.json` sürüm, Electron ve arşiv hashlerini içerir. Ardından Inno Setup 6 ile `windows/installer.iss` derlenir.
 
 ## Otomatik Windows testleri
 
 `.github/workflows/windows-test.yml` main push, pull request ve elle tetikleme için hazırdır. Ayrı paketleme job'u çalışır; Windows 2022 ve 2025 job'larında **setup-node yoktur**. PATH yalnızca Windows sistem klasörleri ile sınırlandırılır, kurulu PostgreSQL servisleri durdurulur. Çalışan Node/PostgreSQL'in paket içinden geldiği doğrulanır.
 
-Test senaryoları: sessiz kurulum, `backups` dizini, WebView2 dosyaları, gömülü pencerenin gerçekten açılması, ilk açılış, gerçek veritabanı sağlık kontrolü, şema sürümü, SQL yedek/geri yükleme, kapanışta otomatik yedek, başka Node süreçlerinin korunması, kapatma, yeniden açma, veri koruyan uygulama güncellemesi ve üzerine yeniden kurulum. Raporlar ve loglar Actions artifact'ine yazılır; parola dosyası ve SQL yedeği yüklenmez.
+Test senaryoları: sessiz kurulum, `backups` dizini, Electron kabuğu ve `resources/app`, gömülü pencerenin gerçekten açılması, ilk açılış, gerçek veritabanı sağlık kontrolü, şema sürümü, personel/servis ekleme sonrası otomatik SQL yedeği, SQL yedek/geri yükleme, kapanışta otomatik yedek, başka Node süreçlerinin korunması, kapatma, yeniden açma, veri koruyan uygulama güncellemesi ve üzerine yeniden kurulum. Raporlar ve loglar Actions artifact'ine yazılır; parola dosyası ve SQL yedeği yüklenmez.
 
 **Durum:** Bu geliştirme ortamı Linux'tur. Windows job'ları burada çalıştırılmadı ve başarılı oldukları iddia edilmez. Değişiklikleri GitHub'a gönderdikten sonra gerçek Actions sonuçlarını inceleyin. GitHub-hosted runner tam temiz son kullanıcı Windows'u değildir; PATH izolasyonu sistem araçlarına bağımlılığı test eder. Son dağıtım onayı için temiz Windows 10/11 sanal veya fiziksel makinede standart kullanıcı, Visual C++ çalışma zamanı, antivirüs/SmartScreen, çevrimdışı başlatma ve port çakışması kontrollerini ayrıca yapın.
 

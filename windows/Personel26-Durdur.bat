@@ -1,6 +1,6 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Personel26-Yonet.ps1" -Action Stop
+"%~dp0Personel26.exe" --stop --quiet
 if errorlevel 1 exit /b 1
 endlocal

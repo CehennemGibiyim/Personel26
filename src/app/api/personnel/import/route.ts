@@ -3,6 +3,7 @@ import { departments, personnel, personnelDepartments, activityLogs } from "@/db
 import { sql } from "drizzle-orm";
 import { parseImportInput, previewImport } from "@/lib/server/personnel-import";
 import { requireSameOrigin } from "@/lib/server/settings";
+import { scheduleMutationBackup } from "@/lib/server/auto-backup";
 export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       await tx.insert(activityLogs).values({ action: "IMPORT", description: `${input.fileName}: ${eligible.length} personel aktarıldı, ${preview.rows.length - eligible.length} satır atlandı.` });
       return { imported: eligible.length, skipped: preview.rows.length - eligible.length, summary: preview.summary };
     });
+    scheduleMutationBackup();
     return Response.json({ ok: true, ...result });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Aktarım tamamlanamadı." }, { status: 400 });

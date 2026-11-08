@@ -216,10 +216,12 @@ switch ($Action) {
     $safety = Native-Backup ''
     Write-UpdateStatus 'installing' 'Yeni surum dosyalari yerlestiriliyor...'
     $old = Join-Path $Data 'app-before-update'
+    $resourcesOld = Join-Path $Data 'resources-before-update'
     $scriptBackup = Join-Path $Data 'root-before-update'
     # Kok dizindeki baslatici/sema dosyalari da yeni surumle gelir; geri donus icin sakla.
     $rootFiles = @('Personel26.exe','personel26.ico','Personel26-Yonet.ps1','Personel26-Guncelle.ps1','Personel26-Baslat.bat','Personel26-Durdur.bat','Personel26-Yedekle.bat','schema.sql','schema-update.sql','BENIOKU.md')
     if (Test-Path $old) { Remove-Item $old -Recurse -Force }
+    if (Test-Path $resourcesOld) { Remove-Item $resourcesOld -Recurse -Force }
     if (Test-Path $scriptBackup) { Remove-Item $scriptBackup -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $scriptBackup | Out-Null
     foreach ($file in $rootFiles) {
@@ -227,8 +229,13 @@ switch ($Action) {
       if (Test-Path $source) { Copy-Item $source (Join-Path $scriptBackup $file) -Force }
     }
     Move-Item (Join-Path $Root 'app') $old
+    $hadResources = Test-Path (Join-Path $Root 'resources')
+    if ($hadResources) { Move-Item (Join-Path $Root 'resources') $resourcesOld }
     try {
       Copy-Item (Join-Path $PackagePath 'app') (Join-Path $Root 'app') -Recurse -Force
+      if (Test-Path (Join-Path $PackagePath 'resources')) {
+        Copy-Item (Join-Path $PackagePath 'resources') (Join-Path $Root 'resources') -Recurse -Force
+      }
       foreach ($file in $rootFiles) {
         $source = Join-Path $PackagePath $file
         if (Test-Path $source) { Copy-Item $source (Join-Path $Root $file) -Force }
@@ -236,6 +243,7 @@ switch ($Action) {
       Write-UpdateStatus 'restarting' 'Yeni surum baslatiliyor ve saglik kontrolu yapiliyor...'
       Start-App
       Remove-Item $old -Recurse -Force
+      Remove-Item $resourcesOld -Recurse -Force -ErrorAction SilentlyContinue
       Remove-Item $scriptBackup -Recurse -Force -ErrorAction SilentlyContinue
       $label = if ($ToVersion) { $ToVersion } else { 'yeni' }
       Write-UpdateStatus 'done' ("Personel26 {0} surumune guncellendi. Veriler korundu." -f $label)
@@ -245,6 +253,8 @@ switch ($Action) {
       Stop-App
       if (Test-Path (Join-Path $Root 'app')) { Remove-Item (Join-Path $Root 'app') -Recurse -Force }
       Move-Item $old (Join-Path $Root 'app')
+      if (Test-Path (Join-Path $Root 'resources')) { Remove-Item (Join-Path $Root 'resources') -Recurse -Force }
+      if ($hadResources -and (Test-Path $resourcesOld)) { Move-Item $resourcesOld (Join-Path $Root 'resources') }
       foreach ($file in $rootFiles) {
         $backup = Join-Path $scriptBackup $file
         if (Test-Path $backup) { Copy-Item $backup (Join-Path $Root $file) -Force }

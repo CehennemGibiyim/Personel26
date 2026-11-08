@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { departments, personnel, personnelDepartments, shiftSchedules, dutyColumns } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { sortByName } from "@/lib/shared";
+import { scheduleMutationBackup } from "@/lib/server/auto-backup";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export async function PATCH(req: Request) {
     }
     const rows = await db.update(departments).set(patch).where(eq(departments.id, id)).returning();
     if (!rows[0]) return Response.json({ error: "Servis bulunamadı" }, { status: 404 });
+    scheduleMutationBackup();
     return Response.json({ department: rows[0] });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Hata" }, { status: 500 });
@@ -82,6 +84,7 @@ export async function POST(req: Request) {
     if (name.length > 80) return Response.json({ error: "Servis adı en fazla 80 karakter olabilir." }, { status: 400 });
     if (await nameTaken(name)) return Response.json({ error: `"${name}" adında bir servis zaten var.` }, { status: 409 });
     const rows = await db.insert(departments).values({ name }).returning();
+    scheduleMutationBackup();
     return Response.json({ department: rows[0] });
   } catch (e) {
     return Response.json({ error: e instanceof Error ? e.message : "Hata" }, { status: 500 });
