@@ -106,6 +106,43 @@ async function waitForHealth(port, seconds = 90) {
   return false;
 }
 
+/**
+ * Yedeği Windows PowerShell betiği yerine çalışan sunucudan (pg_dump) ister.
+ * Antivirüsler `powershell.exe -ExecutionPolicy Bypass` zincirini engellediği
+ * için uygulamadan başlatılan yedekler bu yolu kullanır.
+ */
+function requestNativeBackup(action, timeoutMs = BACKUP_TIMEOUT_MS) {
+  return healthy(readPort()).then((ready) => new Promise((resolve) => {
+    if (!ready) {
+      resolve(false);
+      return;
+    }
+    const port = readPort();
+    const payload = JSON.stringify({ action });
+    const request = http.request({
+      host: '127.0.0.1',
+      port,
+      path: '/api/backup/folder',
+      method: 'POST',
+      timeout: timeoutMs,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => {
+        resolve(response.statusCode === 200 && /"ok"\s*:\s*true/.test(body));
+      });
+    });
+    request.on('timeout', () => request.destroy(new Error('Yedek isteği zaman aşımına uğradı.')));
+    request.on('error', (error) => {
+      log(`Sunucudan yedek alınamadı: ${error && error.message ? error.message : error}`);
+      resolve(false);
+    });
+    request.end(payload);
+  }));
+}
+
 function runManager(action, extra = [], timeoutMs = START_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(manager)) {
@@ -190,9 +227,9 @@ async function startServer() {
   }
 }
 
-function stopServer() {
+function stopServer({ skipBackup = false } = {}) {
   if (stopping) return stopping;
-  stopping = runManager('Stop', [], STOP_TIMEOUT_MS).then((result) => {
+  stopping = runManager('Stop', skipBackup ? ['-SkipBackup'] : [], STOP_TIMEOUT_MS).then((result) => {
     if (result.timedOut) throw new Error('Personel26 zamanında kapatılamadı.');
     return result;
   }).finally(() => { stopping = null; });
@@ -353,12 +390,17 @@ async function desktopTest() {
 async function runCommand() {
   try {
     if (hasFlag('--stop')) {
-      const result = await runManager('Stop', [], STOP_TIMEOUT_MS);
+      const backedUp = await requestNativeBackup('close', 60_000);
+      const result = await runManager('Stop', backedUp ? ['-SkipBackup'] : [], STOP_TIMEOUT_MS);
       if (result.code !== 0 && !quiet) dialog.showErrorBox('Personel26', outputTail(result.output) || 'Personel26 kapatılamadı.');
       app.exit(result.code === 0 ? 0 : 1);
       return;
     }
     if (hasFlag('--backup')) {
+      if (await requestNativeBackup('create')) {
+        app.exit(0);
+        return;
+      }
       const result = await runManager('Backup', [], BACKUP_TIMEOUT_MS);
       if (result.code !== 0 && !quiet) dialog.showErrorBox('Personel26', outputTail(result.output) || 'SQL yedeği alınamadı.');
       app.exit(result.code === 0 ? 0 : 1);
@@ -410,7 +452,10 @@ async function shutdown() {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.hide();
     }
-    await stopServer();
+    // Kapanış yedeği PowerShell yerine sunucudan alınır; başarılıysa betik
+    // yedeği atlanır, böylece antivirüsün engellediği zincir devreye girmez.
+    const backedUp = await requestNativeBackup('close', 60_000);
+    await stopServer({ skipBackup: backedUp });
     log('Uygulama kapatıldı ve kapanış yedeği kontrol edildi');
   } catch (error) {
     log(`Kapanış hatası: ${error && error.message ? error.message : error}`);
@@ -451,7 +496,9 @@ if (!gotLock) {
     }
     if (forwarded.includes('--backup')) {
       log('İkinci kopyadan yedek isteği alındı');
-      void runManager('Backup', [], BACKUP_TIMEOUT_MS);
+      void requestNativeBackup('create').then((done) => {
+        if (!done) return runManager('Backup', [], BACKUP_TIMEOUT_MS);
+      });
       return;
     }
     if (!mainWindow || mainWindow.isDestroyed()) return;

@@ -4,7 +4,9 @@ param(
   [string]$PackagePath,
   [string]$FromVersion,
   [string]$ToVersion,
-  [switch]$NoBrowser
+  [switch]$NoBrowser,
+  # Electron kapanmadan once yedeği kendisi (pg_dump) aldıysa betik yedeği atlanır.
+  [switch]$SkipBackup
 )
 $ErrorActionPreference = 'Stop'
 $Root = $PSScriptRoot
@@ -195,7 +197,7 @@ function Backup-BeforeStop {
 }
 # Kapatma, paket dosyalari eksik olsa bile calisir ve veritabani acikken yedek alir.
 # Tum fonksiyonlar tanimlandiktan sonra cagrilmalidir.
-if ($Action -eq 'Stop') { Backup-BeforeStop; Stop-All; exit 0 }
+if ($Action -eq 'Stop') { if (-not $SkipBackup) { Backup-BeforeStop }; Stop-All; exit 0 }
 if (-not (Test-Path (Join-Path $Root 'node\node.exe')) -or -not (Test-Path (Join-Path $PgBin 'postgres.exe'))) { throw 'Pakette tasinabilir Node.js veya PostgreSQL eksik.' }
 switch ($Action) {
   'Start' { Start-App; if (-not $NoBrowser -and $env:P26_NO_BROWSER -ne '1') { Start-Process "http://127.0.0.1:$($Config.appPort)" }; Write-Host 'Personel26 hazir.' }

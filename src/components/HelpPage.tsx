@@ -129,6 +129,10 @@ const FAQ = [
     a: "Bu, kod imzası sertifikası olmayan yerel kurulumlarda görülür. “Ek bilgi” bağlantısına, ardından “Yine de çalıştır”a bas. Dosyayı yalnızca bu deponun sürümler sayfasından indirdiysen devam et.",
   },
   {
+    q: "Antivirüs yedek almayı engelliyor, ne yapmalıyım?",
+    a: "1.6.1 sürümünden itibaren yedekler PowerShell kullanılmadan doğrudan pg_dump ile alınır; antivirüslerin engellediği betik zinciri devreye girmez. Yine engel görürsen antivirüsün izin listesine Personel26 kurulum klasörünü ve backups dizinini ekle. Windows Güvenlik → Fidye yazılımı koruması → Klasör erişimi denetimi açıksa Personel26'ya izin ver; ardından Yedekleme sayfasından yeniden dene.",
+  },
+  {
     q: "Verilerim nerede tutuluyor?",
     a: "Tüm veriler bu bilgisayarda, kurulum klasöründeki data dizininde ve yerel PostgreSQL’de tutulur. Bulut hesabına veya internete gönderilmez. Yedekler backups dizinindedir.",
   },

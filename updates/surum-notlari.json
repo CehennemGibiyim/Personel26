@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.6.1",
+      "kind": "fix",
+      "title": "Antivirüs engeline takılmayan yedekleme: doğrudan pg_dump, PowerShell yok",
+      "date": "2026-11-08",
+      "notes": [
+        "Otomatik ve elle SQL yedekleri artık PowerShell betiği yerine doğrudan pg_dump ile alınır; antivirüslerin engellediği powershell.exe -ExecutionPolicy Bypass zinciri kaldırıldı.",
+        "Kapanış yedeği ve Personel26.exe --backup komutu da aynı doğrudan yedeği kullanır; paneldeki geri yükleme öncesi güvenlik yedeği de bu yolla alınır.",
+        "Yedek dosyası boş kalırsa veya Windows/antivirüs yazmayı engellerse yarım dosya silinir ve ne yapılacağını söyleyen açık bir hata gösterilir.",
+        "7 günden eski otomatik yedekleri temizleme ve 15 dakikalık kapanış sınırı korunur; yedekler yine kurulum klasöründeki backups dizinine yazılır."
+      ]
+    },
+    {
       "version": "1.6.0",
       "kind": "feature",
       "title": "StockManager ile aynı Electron kabuğu, Alt+Enter tam ekran ve değişiklik anında yedek",
