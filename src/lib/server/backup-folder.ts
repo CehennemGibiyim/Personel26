@@ -40,6 +40,14 @@ export type BackupFolderInfo = {
   custom: boolean;
   /** Kurulum klasöründeki varsayılan `backups` dizini. */
   defaultFolder: string | null;
+  /**
+   * Klasör değiştirilmeden önce kullanılan ve hâlâ yedek içeren klasör.
+   * Yedekler yeni klasöre taşınmadığı için kullanıcıya nerede kaldıkları
+   * gösterilir; yalnızca içinde yedek varsa doldurulur.
+   */
+  previousFolder: string | null;
+  /** Önceki klasörde duran yedek dosyası sayısı. */
+  previousFiles: number;
   files: BackupFile[];
   retentionDays: number;
 };
@@ -56,16 +64,47 @@ function backupFolderFile(): string | null {
   return dir ? path.join(dir, "backup-folder.json") : null;
 }
 
-function savedBackupFolder(): string | null {
+/** `data/backup-folder.json`: seçili klasör ve bir önceki klasör. */
+type BackupFolderConfig = { folder: string | null; previous: string | null };
+
+function savedBackupFolderConfig(): BackupFolderConfig {
   const file = backupFolderFile();
-  if (!file || !existsSync(file)) return null;
+  if (!file || !existsSync(file)) return { folder: null, previous: null };
   try {
-    const raw = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) as { folder?: unknown };
+    const raw = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) as { folder?: unknown; previous?: unknown };
     const folder = typeof raw.folder === "string" ? raw.folder.trim() : "";
-    return folder && path.isAbsolute(folder) ? path.resolve(folder) : null;
+    const previous = typeof raw.previous === "string" ? raw.previous.trim() : "";
+    return {
+      folder: folder && path.isAbsolute(folder) ? path.resolve(folder) : null,
+      previous: previous && path.isAbsolute(previous) ? path.resolve(previous) : null,
+    };
   } catch {
-    return null;
+    return { folder: null, previous: null };
   }
+}
+
+function savedBackupFolder(): string | null {
+  return savedBackupFolderConfig().folder;
+}
+
+/** Klasördeki SQL yedek sayısı (liste 40 ile sınırlı olduğu için ayrı sayılır). */
+function countBackupFiles(folder: string): number {
+  try {
+    return readdirSync(folder).filter(name => name.toLowerCase().endsWith(BACKUP_EXT)).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Bir önceki klasör yalnızca hâlâ yedek içeriyorsa bildirilir: boş bir klasör
+ * için "eski yedekler burada" demek kullanıcıyı yanlış yönlendirirdi.
+ */
+function previousBackupFolder(): { folder: string | null; count: number } {
+  const previous = savedBackupFolderConfig().previous;
+  if (!previous || previous === backupFolder()) return { folder: null, count: 0 };
+  const count = countBackupFiles(previous);
+  return count > 0 ? { folder: previous, count } : { folder: null, count: 0 };
 }
 
 /**
@@ -100,12 +139,15 @@ function unsupportedReason(): string | null {
 export function backupFolderInfo(): BackupFolderInfo {
   const folder = backupFolder();
   const reason = unsupportedReason();
+  const previous = previousBackupFolder();
   return {
     supported: !reason,
     reason,
     folder,
     custom: Boolean(savedBackupFolder()),
     defaultFolder: defaultBackupFolder(),
+    previousFolder: previous.folder,
+    previousFiles: previous.count,
     files: folder && existsSync(folder) ? listBackupFiles(folder) : [],
     retentionDays: BACKUP_RETENTION_DAYS,
   };
@@ -125,7 +167,12 @@ export function setBackupFolder(folder: string | null): BackupFolderInfo {
   if (!file) throw new Error("Veri klasörü bulunamadı.");
 
   if (!folder || !folder.trim()) {
-    if (existsSync(file)) rmSync(file, { force: true });
+    // Varsayılana dönüşte de dosya tutulur: bırakılan klasördeki yedeklerin
+    // nerede olduğu panelde gösterilmeye devam eder.
+    const current = backupFolder();
+    const previous = current && countBackupFiles(current) > 0 ? current : savedBackupFolderConfig().previous;
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, `${JSON.stringify({ folder: null, ...(previous ? { previous } : {}) }, null, 2)}\n`, "utf8");
     return backupFolderInfo();
   }
 
@@ -153,8 +200,14 @@ export function setBackupFolder(folder: string | null): BackupFolderInfo {
     throw blockedBackupError(new Error(`Seçilen klasöre yazılamadı (${target}). ${detail}`));
   }
 
+  // Eski yedekler taşınmaz; hangi klasörde kaldıkları bilgisi saklanır.
+  const current = backupFolder();
+  const config = savedBackupFolderConfig();
+  const previous = current && current !== target && countBackupFiles(current) > 0
+    ? current
+    : (config.previous && config.previous !== target ? config.previous : null);
   mkdirSync(path.dirname(file), { recursive: true });
-  writeFileSync(file, `${JSON.stringify({ folder: target }, null, 2)}\n`, "utf8");
+  writeFileSync(file, `${JSON.stringify({ folder: target, ...(previous ? { previous } : {}) }, null, 2)}\n`, "utf8");
   return backupFolderInfo();
 }
 

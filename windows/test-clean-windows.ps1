@@ -120,10 +120,18 @@ try {
   if (Test-Path $CustomBackups) { Remove-Item $CustomBackups -Recurse -Force }
   $folderChange = Api '/api/backup/folder' 'POST' @{ action='set-folder'; folder=$CustomBackups }
   Assert-Check 'Ozel yedek klasoru secildi' ($folderChange.ok -eq $true -and $folderChange.custom -eq $true -and $folderChange.folder -eq $CustomBackups -and (Test-Path $CustomBackups))
+  # Liste yalnizca yeni klasoru gosterir; eski klasordeki yedekler listede yer almaz
+  # ama nerede kaldiklari panelde bildirilir.
+  $previousBackupName = Split-Path -Leaf $folderBackup.file
+  Assert-Check 'Yeni klasorde liste bos' ($folderChange.files.Count -eq 0)
+  Assert-Check 'Eski klasordeki yedek listede yok' (-not (@($folderChange.files.name) -contains $previousBackupName))
+  Assert-Check 'Onceki yedek klasoru bildirildi' ($folderChange.previousFolder -eq (Join-Path $Target 'backups') -and $folderChange.previousFiles -gt 0)
   $customBackup = Api '/api/backup/folder' 'POST' @{ action='create' }
   Assert-Check 'Yedek secilen klasore yazildi' ($customBackup.ok -eq $true -and $customBackup.folder -eq $CustomBackups -and (Test-Path $customBackup.file) -and (Split-Path -Parent $customBackup.file) -eq $CustomBackups)
   $folderReset = Api '/api/backup/folder' 'POST' @{ action='reset-folder' }
   Assert-Check 'Varsayilan yedek klasorune donus' ($folderReset.ok -eq $true -and $folderReset.custom -eq $false -and $folderReset.folder -eq (Join-Path $Target 'backups'))
+  Assert-Check 'Varsayilana donuste eski klasor bildirildi' ($folderReset.previousFolder -eq $CustomBackups -and $folderReset.previousFiles -ge 1)
+  Assert-Check 'Ozel klasordeki yedek varsayilan listede yok' (-not (@($folderReset.files.name) -contains (Split-Path -Leaf $customBackup.file)))
   # Antivirusun engelledigi PowerShell zinciri yerine yedek dogrudan pg_dump ile
   # alinir; kapanis yedegi de ayni yolu kullanmali ve betik yedegine dusmemeli.
   # 15 dakikalik kapanis siniri testi belirsizlestirmesin: isaret dosyasi silinir.

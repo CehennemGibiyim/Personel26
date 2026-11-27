@@ -13,6 +13,9 @@ type FolderInfo = {
   folder: string | null;
   custom: boolean;
   defaultFolder: string | null;
+  /** Klasör değişmeden önce kullanılan ve hâlâ yedek içeren klasör. */
+  previousFolder: string | null;
+  previousFiles: number;
   files: BackupFile[];
   retentionDays: number;
 };
@@ -176,11 +179,16 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error ?? "Yedek klasörü değiştirilemedi.");
-      setInfo(data as FolderInfo);
+      const next = data as FolderInfo;
+      setInfo(next);
       setEditing(false);
-      notify(reset
+      // Yedekler taşınmıyor: eski klasörde kalan dosyaların yeri açıkça söylenir.
+      const leftover = next.previousFolder && next.previousFiles > 0
+        ? ` Önceki klasördeki ${next.previousFiles} yedek ${next.previousFolder} konumunda duruyor; yeni listeye taşınmadı.`
+        : "";
+      notify((reset
         ? "Yedek klasörü kurulum klasöründeki backups dizinine döndürüldü."
-        : `Yedek klasörü değiştirildi: ${data.folder}`);
+        : `Yedek klasörü değiştirildi: ${next.folder}.`) + leftover);
     } catch (error) {
       notify(error instanceof Error ? error.message : "Yedek klasörü değiştirilemedi.", true);
     } finally {
@@ -219,6 +227,14 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
       <button className="settings-btn small" onClick={openFolder}><FolderOpen size={13} /> Klasörü aç</button>
     </div>}
 
+    {info?.previousFolder && info.previousFiles > 0 && <div className="settings-note backup-folder-previous">
+      <AlertTriangle size={16} />
+      <p>
+        Önceki yedek klasörü: <code>{info.previousFolder}</code>. Oradaki <b>{info.previousFiles}</b> yedek dosyası
+        yeni klasöre taşınmadı ve aşağıdaki listede görünmez. Gerekirse o klasörden elle kopyalayabilirsiniz.
+      </p>
+    </div>}
+
     {info?.supported && <div className="backup-folder-setting">
       {!editing ? <div className="backup-folder-setting-row">
         <div>
@@ -255,7 +271,7 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
         </div>
         <p className="backup-folder-hint">
           Tam yol girin (ör. <code>D:\Personel26 Yedek</code>). Klasör yoksa oluşturulur ve yazma izni hemen denenir.
-          Varsayılana dönmek için <b>Varsayılana döndür</b> düğmesini kullanın.
+          Klasör değiştirildiğinde eski klasördeki yedekler taşınmaz. Varsayılana dönmek için <b>Varsayılana döndür</b> düğmesini kullanın.
         </p>
       </>}
     </div>}
@@ -291,7 +307,11 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
         </div>)}
         {!info.files.length && <div className="backup-file-empty">
           <HardDriveDownload size={18} />
-          <span>{loading ? "Yedekler yükleniyor…" : "Bu klasörde henüz yedek yok. İlk yedeği Şimdi yedek al ile oluşturun."}</span>
+          <span>{loading
+            ? "Yedekler yükleniyor…"
+            : info.previousFolder && info.previousFiles > 0
+              ? `Bu klasörde henüz yedek yok. Önceki klasördeki ${info.previousFiles} yedek ${info.previousFolder} konumunda duruyor.`
+              : "Bu klasörde henüz yedek yok. İlk yedeği Şimdi yedek al ile oluşturun."}</span>
         </div>}
       </div>
     </>}
