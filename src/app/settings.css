@@ -269,6 +269,8 @@ select.settings-input option { background:#101b2c; }
 .backup-file-restore:disabled { opacity:.5; cursor:not-allowed; }
 .backup-file-empty { display:flex; align-items:center; gap:10px; padding:14px 0; color:#7188a4; font-size:9.5px; }
 .local-backup .settings-note { margin:0 22px 18px; }
+.local-backup .settings-note.backup-folder-previous { border-color:#6b5324; background:#2a2113; color:#dcc49b; }
+.local-backup .settings-note.backup-folder-previous svg { color:#d9a441; }
 .local-backup code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:9px; color:#9dc3e6; background:#162335; border:1px solid #24364c; border-radius:4px; padding:0 4px; }
 .settings-table { width:100%; border-collapse:collapse; font-size:10px; }
 .settings-table th { color:#718aaa; font-size:8px; font-weight:500; letter-spacing:.8px; text-align:left; background:#132136; border-bottom:1px solid #2c415e; padding:13px 18px; white-space:nowrap; }
