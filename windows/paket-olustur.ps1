@@ -81,6 +81,7 @@ function Build-DesktopShell {
   if (Test-Path $desktopApp) { Remove-Item $desktopApp -Recurse -Force }
   New-Item -ItemType Directory -Force -Path $desktopApp | Out-Null
   Copy-Item (Join-Path $Root 'electron\main.cjs') $desktopApp -Force
+  Copy-Item (Join-Path $Root 'electron\preload.cjs') $desktopApp -Force
   $desktopPackage = @{
     name = 'personel26'
     productName = 'Personel26'

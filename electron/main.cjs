@@ -13,7 +13,7 @@
  *   Esc              tam ekrandan çık
  */
 
-const { app, BrowserWindow, Menu, shell, dialog, session } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, session, ipcMain } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
@@ -33,7 +33,7 @@ const root = process.env.P26_ROOT
 
 const manager = path.join(root, 'Personel26-Yonet.ps1');
 const iconFile = path.join(root, 'personel26.ico');
-const backupsDir = path.join(root, 'backups');
+const defaultBackupsDir = path.join(root, 'backups');
 const argv = process.argv.slice(1);
 const quiet = hasFlag('--quiet');
 const smoke = hasFlag('--desktop-test') || hasFlag('--webview-test');
@@ -279,6 +279,39 @@ function isLocal(url) {
   }
 }
 
+/** Panelden seçilen yedek klasörü; yoksa kurulum klasöründeki backups. */
+function backupsDir() {
+  try {
+    const raw = fs.readFileSync(path.join(root, 'data', 'backup-folder.json'), 'utf8').replace(/^\uFEFF/, '');
+    const folder = JSON.parse(raw).folder;
+    if (typeof folder === 'string' && path.isAbsolute(folder)) return folder;
+  } catch {
+    /* ayar yoksa varsayılan kullanılır */
+  }
+  return defaultBackupsDir;
+}
+
+/**
+ * Yedek klasörü seçme penceresi. Yalnızca yerel Personel26 sayfasından gelen
+ * istekler kabul edilir; sayfa dosya sistemine erişemez, sadece seçilen yolu alır.
+ */
+ipcMain.handle('p26:pick-backup-folder', async (event, current) => {
+  let senderUrl = '';
+  try { senderUrl = event.senderFrame ? event.senderFrame.url : event.sender.getURL(); } catch { /* yoksay */ }
+  if (!isLocal(senderUrl)) return null;
+  const options = {
+    title: 'Yedek klasörünü seçin',
+    defaultPath: typeof current === 'string' && path.isAbsolute(current) ? current : backupsDir(),
+    properties: ['openDirectory', 'createDirectory'],
+    buttonLabel: 'Bu klasörü kullan',
+  };
+  const result = mainWindow && !mainWindow.isDestroyed()
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
 function external(url) {
   if (!/^(https?|mailto|tel|whatsapp):/i.test(url)) return;
   shell.openExternal(url).catch(() => { /* varsayılan işleyici yoksa sessiz geç */ });
@@ -299,6 +332,7 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      preload: path.join(__dirname, 'preload.cjs'),
       spellcheck: true,
     },
   });
@@ -345,11 +379,12 @@ function registerDownloadRedirect() {
     const name = item.getFilename() || '';
     if (!/\.json$/i.test(name)) return;
     try {
-      fs.mkdirSync(backupsDir, { recursive: true });
-      let target = path.join(backupsDir, name);
+      const folder = backupsDir();
+      fs.mkdirSync(folder, { recursive: true });
+      let target = path.join(folder, name);
       if (fs.existsSync(target)) {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        target = path.join(backupsDir, name.replace(/\.json$/i, `-${stamp}.json`));
+        target = path.join(folder, name.replace(/\.json$/i, `-${stamp}.json`));
       }
       item.setSavePath(target);
     } catch {

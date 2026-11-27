@@ -36,16 +36,49 @@ export type BackupFolderInfo = {
   supported: boolean;
   reason: string | null;
   folder: string | null;
+  /** Ayarlardan kurulum klasörü dışında bir klasör seçildiyse true. */
+  custom: boolean;
+  /** Kurulum klasöründeki varsayılan `backups` dizini. */
+  defaultFolder: string | null;
   files: BackupFile[];
   retentionDays: number;
 };
 
-/** Yedek klasörü: açıkça tanımlıysa `P26_BACKUP_DIR`, yoksa kurulum kökü/backups. */
-export function backupFolder(): string | null {
-  const configured = process.env.P26_BACKUP_DIR?.trim();
-  if (configured) return path.resolve(configured);
+/** Varsayılan yedek klasörü: kurulum kökü/backups. */
+export function defaultBackupFolder(): string | null {
   const root = appRoot();
   return root ? path.join(root, "backups") : null;
+}
+
+/** Ayarlardan seçilen klasörün saklandığı dosya (`data/backup-folder.json`). */
+function backupFolderFile(): string | null {
+  const dir = dataDir();
+  return dir ? path.join(dir, "backup-folder.json") : null;
+}
+
+function savedBackupFolder(): string | null {
+  const file = backupFolderFile();
+  if (!file || !existsSync(file)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(file, "utf8").replace(/^\uFEFF/, "")) as { folder?: unknown };
+    const folder = typeof raw.folder === "string" ? raw.folder.trim() : "";
+    return folder && path.isAbsolute(folder) ? path.resolve(folder) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Yedek klasörü: panelden seçilen klasör → `P26_BACKUP_DIR` → kurulum kökü/backups.
+ * Panel seçimi önceliklidir; böylece Personel26-Yonet.ps1'in ortam değişkeni
+ * kullanıcı seçimini ezmez.
+ */
+export function backupFolder(): string | null {
+  const saved = savedBackupFolder();
+  if (saved) return saved;
+  const configured = process.env.P26_BACKUP_DIR?.trim();
+  if (configured) return path.resolve(configured);
+  return defaultBackupFolder();
 }
 
 /** Paketteki PostgreSQL araçlarının klasörü (`pg_dump.exe`, `psql.exe`). */
@@ -71,9 +104,58 @@ export function backupFolderInfo(): BackupFolderInfo {
     supported: !reason,
     reason,
     folder,
+    custom: Boolean(savedBackupFolder()),
+    defaultFolder: defaultBackupFolder(),
     files: folder && existsSync(folder) ? listBackupFiles(folder) : [],
     retentionDays: BACKUP_RETENTION_DAYS,
   };
+}
+
+/**
+ * Yedek klasörünü değiştirir veya `null` ile varsayılana döndürür.
+ *
+ * Klasör yoksa oluşturulur ve hemen bir deneme dosyası yazılır: böylece yazma
+ * izni olmayan (ör. korumalı) bir klasör seçildiğinde yedek alınana kadar
+ * beklenmez, hata anında ve anlaşılır biçimde gösterilir.
+ */
+export function setBackupFolder(folder: string | null): BackupFolderInfo {
+  const reason = unsupportedReason();
+  if (reason) throw new Error(reason);
+  const file = backupFolderFile();
+  if (!file) throw new Error("Veri klasörü bulunamadı.");
+
+  if (!folder || !folder.trim()) {
+    if (existsSync(file)) rmSync(file, { force: true });
+    return backupFolderInfo();
+  }
+
+  const value = folder.trim().replace(/^"|"$/g, "").trim();
+  if (value.length > 500) throw new Error("Klasör yolu çok uzun.");
+  if (!/^[a-zA-Z]:[\\/]/.test(value) && !/^\\\\[^\\]+\\/.test(value)) {
+    throw new Error("Tam klasör yolu girin; örnek: D:\\Personel26 Yedek");
+  }
+  const target = path.resolve(value);
+  const root = appRoot();
+  if (root) {
+    const reserved = [root, path.join(root, "app"), path.join(root, "data"), path.join(root, "data", "pgdata")];
+    if (reserved.some(item => target === item) || target.startsWith(`${path.join(root, "data", "pgdata")}${path.sep}`)) {
+      throw new Error("Kurulum veya veritabanı klasörü yedek hedefi olamaz. Farklı bir klasör seçin.");
+    }
+  }
+
+  try {
+    mkdirSync(target, { recursive: true });
+    const probe = path.join(target, `.personel26-yazma-testi-${process.pid}`);
+    writeFileSync(probe, "test", "utf8");
+    rmSync(probe, { force: true });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw blockedBackupError(new Error(`Seçilen klasöre yazılamadı (${target}). ${detail}`));
+  }
+
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify({ folder: target }, null, 2)}\n`, "utf8");
+  return backupFolderInfo();
 }
 
 /** Klasördeki SQL yedekleri (en yeni önce). */

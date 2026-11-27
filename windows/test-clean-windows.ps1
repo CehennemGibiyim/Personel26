@@ -72,6 +72,7 @@ try {
   Assert-Check 'Ikonlu Personel26.exe kuruldu' ((Test-Path $Launcher) -and ((Get-Item $Launcher).Length -gt 50MB))
   Assert-Check 'Electron masaustu kabugu paketlendi' (
     (Test-Path (Join-Path $Target 'resources\app\main.cjs')) -and
+    (Test-Path (Join-Path $Target 'resources\app\preload.cjs')) -and
     (Test-Path (Join-Path $Target 'resources\app\package.json')) -and
     ((Get-Item $Launcher).VersionInfo.ProductName -eq 'Personel26')
   )
@@ -114,6 +115,15 @@ try {
   $folderBackup = Api '/api/backup/folder' 'POST' @{ action='create' }
   $folderDumpHead = if ($folderBackup.file -and (Test-Path $folderBackup.file)) { Get-Content -LiteralPath $folderBackup.file -TotalCount 5 -ErrorAction SilentlyContinue } else { '' }
   Assert-Check 'Panelden klasor yedegi olusturuldu' ($folderBackup.ok -eq $true -and (Test-Path $folderBackup.file) -and ($folderDumpHead -match 'PostgreSQL database dump'))
+  # Yedek klasoru panelden degistirilebilir: ozel klasore yaz, sonra varsayilana don.
+  $CustomBackups = Join-Path $TempRoot 'Personel26 ozel yedekler'
+  if (Test-Path $CustomBackups) { Remove-Item $CustomBackups -Recurse -Force }
+  $folderChange = Api '/api/backup/folder' 'POST' @{ action='set-folder'; folder=$CustomBackups }
+  Assert-Check 'Ozel yedek klasoru secildi' ($folderChange.ok -eq $true -and $folderChange.custom -eq $true -and $folderChange.folder -eq $CustomBackups -and (Test-Path $CustomBackups))
+  $customBackup = Api '/api/backup/folder' 'POST' @{ action='create' }
+  Assert-Check 'Yedek secilen klasore yazildi' ($customBackup.ok -eq $true -and $customBackup.folder -eq $CustomBackups -and (Test-Path $customBackup.file) -and (Split-Path -Parent $customBackup.file) -eq $CustomBackups)
+  $folderReset = Api '/api/backup/folder' 'POST' @{ action='reset-folder' }
+  Assert-Check 'Varsayilan yedek klasorune donus' ($folderReset.ok -eq $true -and $folderReset.custom -eq $false -and $folderReset.folder -eq (Join-Path $Target 'backups'))
   # Antivirusun engelledigi PowerShell zinciri yerine yedek dogrudan pg_dump ile
   # alinir; kapanis yedegi de ayni yolu kullanmali ve betik yedegine dusmemeli.
   # 15 dakikalik kapanis siniri testi belirsizlestirmesin: isaret dosyasi silinir.

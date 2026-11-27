@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, Copy, FolderOpen, HardDriveDownload, Loader2, RefreshCw, RotateCcw, ShieldCheck,
+  AlertTriangle, CheckCircle2, Copy, FolderCog, FolderOpen, HardDriveDownload, Loader2, RefreshCw, RotateCcw, Save, ShieldCheck, Undo2,
 } from "lucide-react";
 import { BROWSER_ONLY } from "@/lib/app-info";
 import { formatBytes } from "@/lib/version-utils";
@@ -11,9 +11,22 @@ type FolderInfo = {
   supported: boolean;
   reason: string | null;
   folder: string | null;
+  custom: boolean;
+  defaultFolder: string | null;
   files: BackupFile[];
   retentionDays: number;
 };
+
+type DesktopBridge = {
+  isDesktop?: boolean;
+  pickBackupFolder?: (current?: string | null) => Promise<string | null>;
+};
+
+declare global {
+  interface Window {
+    personel26Desktop?: DesktopBridge;
+  }
+}
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -21,11 +34,12 @@ function formatDate(value: string): string {
 }
 
 /**
- * Windows kurulumunda yedeklerin toplandığı `backups` klasörü.
+ * Windows kurulumunda yedeklerin toplandığı klasör.
  *
- * Elle yedek alma, klasör yolunu kopyalama, klasörü açma ve kapanışta otomatik
- * yedek isteme bu karttan yönetilir. GitHub Pages sürümünde dosya sistemi
- * olmadığı için yalnızca bilgilendirme gösterilir.
+ * Elle yedek alma, klasör yolunu kopyalama, klasörü açma, yedek klasörünü
+ * değiştirme ve kapanışta otomatik yedek isteme bu karttan yönetilir.
+ * GitHub Pages sürümünde dosya sistemi olmadığı için yalnızca bilgilendirme
+ * gösterilir.
  */
 export default function LocalBackupCard({ notify }: { notify: (message: string, error?: boolean) => void }) {
   const [info, setInfo] = useState<FolderInfo | null>(null);
@@ -33,10 +47,16 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
   const [busy, setBusy] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savingPath, setSavingPath] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [hasPicker, setHasPicker] = useState(false);
   // notify her render'da yeni bir fonksiyon olabilir; yükleme döngüsünü önlemek
   // için güncel referansı tutulur, yükleme yalnızca bir kez çalışır.
   const notifyRef = useRef(notify);
   useEffect(() => { notifyRef.current = notify; }, [notify]);
+  useEffect(() => { setHasPicker(Boolean(window.personel26Desktop?.pickBackupFolder)); }, []);
 
   const load = useCallback(async () => {
     if (BROWSER_ONLY) return;
@@ -124,6 +144,50 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
     }
   }
 
+  function startEdit() {
+    setDraft(info?.folder ?? "");
+    setEditing(true);
+  }
+
+  async function pick() {
+    const bridge = window.personel26Desktop;
+    if (!bridge?.pickBackupFolder) {
+      notify("Klasör seçme penceresi yalnızca Personel26 masaüstü uygulamasında açılır. Yolu elle yazabilirsiniz.", true);
+      return;
+    }
+    setPicking(true);
+    try {
+      const chosen = await bridge.pickBackupFolder(draft || info?.folder || null);
+      if (chosen) setDraft(chosen);
+    } catch {
+      notify("Klasör seçilemedi. Yolu elle yazabilirsiniz.", true);
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  async function saveFolder(reset = false) {
+    setSavingPath(true);
+    try {
+      const response = await fetch("/api/backup/folder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reset ? { action: "reset-folder" } : { action: "set-folder", folder: draft }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error ?? "Yedek klasörü değiştirilemedi.");
+      setInfo(data as FolderInfo);
+      setEditing(false);
+      notify(reset
+        ? "Yedek klasörü kurulum klasöründeki backups dizinine döndürüldü."
+        : `Yedek klasörü değiştirildi: ${data.folder}`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Yedek klasörü değiştirilemedi.", true);
+    } finally {
+      setSavingPath(false);
+    }
+  }
+
   if (BROWSER_ONLY) {
     return <div className="settings-card local-backup">
       <div className="section-heading">
@@ -141,7 +205,7 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
     <div className="section-heading">
       <span className="settings-icon green"><HardDriveDownload size={19} /></span>
       <div>
-        <h3>Kurulum klasöründeki yedekler</h3>
+        <h3>SQL yedek klasörü</h3>
         <p>Elle ve kapanışta alınan SQL yedekleri bu klasörde toplanır.</p>
       </div>
       <span className="row-status valid">{info?.retentionDays ?? 7} gün saklanır</span>
@@ -155,6 +219,47 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
       <button className="settings-btn small" onClick={openFolder}><FolderOpen size={13} /> Klasörü aç</button>
     </div>}
 
+    {info?.supported && <div className="backup-folder-setting">
+      {!editing ? <div className="backup-folder-setting-row">
+        <div>
+          <b>Yedek klasörünü değiştir{info.custom && <span className="tiny-tag">ÖZEL</span>}</b>
+          <p>{info.custom
+            ? "Yedekler seçtiğiniz klasöre yazılır. Kurulum klasöründen bağımsızdır."
+            : "Varsayılan olarak kurulum klasöründeki backups dizini kullanılır."}</p>
+        </div>
+        <div className="backup-folder-setting-actions">
+          <button className="settings-btn small" onClick={startEdit}><FolderCog size={13} /> Klasörü değiştir</button>
+          {info.custom && <button className="settings-btn small" onClick={() => void saveFolder(true)} disabled={savingPath}>
+            {savingPath ? <Loader2 size={13} className="animate-spin" /> : <Undo2 size={13} />} Varsayılana döndür
+          </button>}
+        </div>
+      </div> : <>
+        <label className="backup-folder-input">Yedek klasörü
+          <input
+            className="settings-input"
+            value={draft}
+            onChange={event => setDraft(event.target.value)}
+            placeholder="D:\\Personel26 Yedek"
+            spellCheck={false}
+            autoFocus
+          />
+        </label>
+        <div className="backup-folder-setting-actions">
+          {hasPicker && <button className="settings-btn small" onClick={() => void pick()} disabled={picking || savingPath}>
+            {picking ? <Loader2 size={13} className="animate-spin" /> : <FolderOpen size={13} />} Gözat…
+          </button>}
+          <button className="settings-btn small primary" onClick={() => void saveFolder(false)} disabled={savingPath || !draft.trim()}>
+            {savingPath ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Kaydet
+          </button>
+          <button className="settings-btn small" onClick={() => setEditing(false)} disabled={savingPath}>Vazgeç</button>
+        </div>
+        <p className="backup-folder-hint">
+          Tam yol girin (ör. <code>D:\Personel26 Yedek</code>). Klasör yoksa oluşturulur ve yazma izni hemen denenir.
+          Varsayılana dönmek için <b>Varsayılana döndür</b> düğmesini kullanın.
+        </p>
+      </>}
+    </div>}
+
     {!info?.supported && <div className="settings-note">
       <AlertTriangle size={16} />
       <p>{loading ? "Yedek klasörü denetleniyor…" : info?.reason ?? "Yedek klasörü bu çalışma biçiminde kullanılamıyor."}</p>
@@ -162,7 +267,7 @@ export default function LocalBackupCard({ notify }: { notify: (message: string, 
 
     {info?.supported && <>
       <div className="backup-folder-actions">
-        <button className="settings-btn primary" disabled={busy || !!restoring} onClick={create}>
+        <button className="settings-btn primary" disabled={busy || !!restoring || editing} onClick={create}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : <HardDriveDownload size={15} />} Şimdi yedek al
         </button>
         <button className="settings-btn" disabled={busy || !!restoring} onClick={load}><RefreshCw size={15} /> Yenile</button>

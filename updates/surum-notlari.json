@@ -1,6 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.6.2",
+      "kind": "feature",
+      "title": "Yedek klasörünü Ayarlar'dan seçin: farklı disk veya ağ klasörü",
+      "date": "2026-11-08",
+      "notes": [
+        "Ayarlar → Yedekleme & Veritabanı bölümünden SQL yedeklerinin yazılacağı klasör değiştirilebilir; örneğin D: sürücüsünde ayrı bir yedek klasörü seçilebilir.",
+        "Klasör, masaüstü uygulamasındaki Gözat penceresiyle seçilebilir veya tam yolu elle yazılabilir; seçilen klasör yoksa oluşturulur ve yazma izni hemen denenir.",
+        "Elle yedek, otomatik yedek, kapanış yedeği ve geri yükleme öncesi güvenlik yedeği aynı klasöre yazılır; 7 günlük temizlik seçilen klasörde uygulanır.",
+        "Tek düğmeyle kurulum klasöründeki backups dizinine dönülebilir; antivirüsün koruduğu klasör yerine ayrı bir disk seçmek de mümkündür.",
+        "Kurulum veya veritabanı klasörü yedek hedefi olarak seçilemez; yazılamayan klasörlerde açık bir hata gösterilir."
+      ]
+    },
+    {
       "version": "1.6.1",
       "kind": "fix",
       "title": "Antivirüs engeline takılmayan yedekleme: doğrudan pg_dump, PowerShell yok",
