@@ -18,8 +18,19 @@ $ConfigFile = Join-Path $Data 'connection.json'
 $UpdatesDir = Join-Path $Data 'updates'
 $StatusFile = Join-Path $Data 'update-status.json'
 $UpdateLog = Join-Path $UpdatesDir 'update.log'
-# Yedekler kurulum klasorunde toplanir; kullanici kolayca bulup baska bir diske kopyalayabilir.
-$BackupsDir = if ($env:P26_BACKUP_DIR) { [IO.Path]::GetFullPath($env:P26_BACKUP_DIR) } else { Join-Path $Root 'backups' }
+# Yedek klasoru panelden degistirilebilir (data\backup-folder.json). Secim yoksa
+# P26_BACKUP_DIR, o da yoksa kurulum klasorundeki backups dizini kullanilir.
+$BackupFolderFile = Join-Path $Data 'backup-folder.json'
+$BackupsDir = $null
+if (Test-Path $BackupFolderFile) {
+  try {
+    $savedFolder = (Get-Content -LiteralPath $BackupFolderFile -Raw | ConvertFrom-Json).folder
+    if ($savedFolder -and [IO.Path]::IsPathRooted([string]$savedFolder)) { $BackupsDir = [IO.Path]::GetFullPath([string]$savedFolder) }
+  } catch { }
+}
+if (-not $BackupsDir) {
+  $BackupsDir = if ($env:P26_BACKUP_DIR) { [IO.Path]::GetFullPath($env:P26_BACKUP_DIR) } else { Join-Path $Root 'backups' }
+}
 $BackupRetentionDays = 7
 # Panelin guncelleme ekrani bu dosyayi okur; betik cokerse son durum gorunur.
 function Write-UpdateStatus([string]$State, [string]$Message) {

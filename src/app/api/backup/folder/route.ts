@@ -5,6 +5,7 @@ import {
   createFolderBackup,
   openBackupFolder,
   restoreFolderBackup,
+  setBackupFolder,
 } from "@/lib/server/backup-folder";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +18,8 @@ export async function GET() {
 
 /**
  * `create`: elle SQL yedeği · `close`: kapanışta otomatik yedek (15 dk sınırı)
- * `restore`: seçilen SQL yedeğini geri yükle · `open`: yedek klasörünü aç.
+ * `restore`: seçilen SQL yedeğini geri yükle · `open`: yedek klasörünü aç
+ * `set-folder` / `reset-folder`: yedek klasörünü değiştir / varsayılana döndür.
  */
 export async function POST(request: Request) {
   try {
@@ -31,6 +33,15 @@ export async function POST(request: Request) {
     if (action === "create") {
       const result = await createFolderBackup();
       return Response.json({ ok: true, ...result, ...backupFolderInfo() });
+    }
+    if (action === "set-folder") {
+      const folder = typeof body?.folder === "string" ? body.folder : "";
+      const info = setBackupFolder(folder);
+      return Response.json({ ok: true, ...info });
+    }
+    if (action === "reset-folder") {
+      const info = setBackupFolder(null);
+      return Response.json({ ok: true, ...info });
     }
     if (action === "close") {
       const result = await autoBackupOnClose();
@@ -46,7 +57,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Yedek işlemi başarısız.";
     if (/izni yok|izin yok/i.test(message)) return Response.json({ error: message }, { status: 403 });
-    if (/Geçersiz|seçilmedi|boş/i.test(message)) return Response.json({ error: message }, { status: 400 });
+    if (/Geçersiz|seçilmedi|boş|Tam klasör|yazılamadı|olamaz|çok uzun/i.test(message)) return Response.json({ error: message }, { status: 400 });
     const unsupported = /yalnızca Windows|bulunamadı|belirlenemedi|desteklenmiyor/i.test(message);
     return Response.json({ error: message }, { status: unsupported ? 409 : 500 });
   }

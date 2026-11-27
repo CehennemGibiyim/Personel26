@@ -133,8 +133,12 @@ const FAQ = [
     a: "1.6.1 sürümünden itibaren yedekler PowerShell kullanılmadan doğrudan pg_dump ile alınır; antivirüslerin engellediği betik zinciri devreye girmez. Yine engel görürsen antivirüsün izin listesine Personel26 kurulum klasörünü ve backups dizinini ekle. Windows Güvenlik → Fidye yazılımı koruması → Klasör erişimi denetimi açıksa Personel26'ya izin ver; ardından Yedekleme sayfasından yeniden dene.",
   },
   {
+    q: "Yedek klasörünü başka bir diske nasıl alırım?",
+    a: "Ayarlar → Yedekleme & Veritabanı bölümünde SQL yedek klasörü kartındaki Klasörü değiştir düğmesine bas. Gözat ile yeni klasörü seçebilir veya yolu elle yazabilirsin. Kaydet dediğinde klasör yoksa oluşturulur ve yazma izni hemen denenir; elle, otomatik ve kapanış yedekleri bundan sonra o klasöre yazılır. Kurulum klasöründeki backups dizinine dönmek için Varsayılana döndür düğmesini kullan.",
+  },
+  {
     q: "Verilerim nerede tutuluyor?",
-    a: "Tüm veriler bu bilgisayarda, kurulum klasöründeki data dizininde ve yerel PostgreSQL’de tutulur. Bulut hesabına veya internete gönderilmez. Yedekler backups dizinindedir.",
+    a: "Tüm veriler bu bilgisayarda, kurulum klasöründeki data dizininde ve yerel PostgreSQL’de tutulur. Bulut hesabına veya internete gönderilmez. Yedekler varsayılan olarak backups dizinindedir; Ayarlar → Yedekleme bölümünden başka bir klasör de seçilebilir.",
   },
   {
     q: "Uygulamayı nasıl kapatırım?",
@@ -347,7 +351,7 @@ export default function HelpPage() {
           <h3 className="mt-3 text-xs font-bold text-white">Dosya konumları</h3>
           <dl className="mt-2 space-y-2 text-[10.5px]">
             <div><dt className="font-bold text-white/60">Veritabanı</dt><dd className="text-white/35">Kurulum klasörü\data</dd></div>
-            <div><dt className="font-bold text-white/60">Yedekler</dt><dd className="text-white/35">Kurulum klasörü\backups</dd></div>
+            <div><dt className="font-bold text-white/60">Yedekler</dt><dd className="text-white/35">Ayarlardan seçilebilir · varsayılan kurulum klasörü\backups</dd></div>
             <div><dt className="font-bold text-white/60">Günlükler</dt><dd className="text-white/35">data\app.log · data\app-error.log</dd></div>
           </dl>
         </div>
